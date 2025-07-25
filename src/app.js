@@ -10,6 +10,7 @@ app.use(cors({
   origin: [
     'https://cryptominepro.vercel.app',
     'http://localhost:5173',
+    'https://minershub.pro',
     'http://localhost:5174'
   ],
   credentials: true,
