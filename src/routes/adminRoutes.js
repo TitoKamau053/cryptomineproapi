@@ -1,19 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const adminController = require('../controllers/adminController');
-const authMiddleware = require('../middleware/authMiddleware');
 
-// Middleware to check admin role
-const requireAdmin = (req, res, next) => {
-  if (req.user.role !== 'admin') {
-    return res.status(403).json({ message: 'Admin access required' });
-  }
-  next();
-};
-
-// Apply auth and admin middleware to all routes
-router.use(authMiddleware.verifyToken);
-router.use(requireAdmin);
+// Note: Auth and admin middleware are already applied in app.js
+// No need to reapply them here
 
 // === SYSTEM MANAGEMENT ===
 router.get('/stats', adminController.getAdminStats);

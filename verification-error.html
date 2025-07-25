@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Email Verification Error - CryptoMinePro</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 15px;
+            padding: 40px;
+            text-align: center;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.1);
+            max-width: 500px;
+            width: 100%;
+        }
+
+        .error-icon {
+            width: 80px;
+            height: 80px;
+            background: #dc3545;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 30px;
+            color: white;
+            font-size: 40px;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 28px;
+        }
+
+        p {
+            color: #666;
+            margin-bottom: 15px;
+            line-height: 1.6;
+        }
+
+        .error-details {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            border-left: 4px solid #dc3545;
+        }
+
+        .solutions {
+            background: #d1ecf1;
+            color: #0c5460;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+            text-align: left;
+        }
+
+        .solutions h3 {
+            margin-bottom: 15px;
+            color: #0c5460;
+        }
+
+        .solutions ul {
+            margin-left: 20px;
+        }
+
+        .solutions li {
+            margin-bottom: 8px;
+        }
+
+        .actions {
+            margin-top: 30px;
+        }
+
+        .btn {
+            display: inline-block;
+            padding: 12px 24px;
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            transition: background 0.3s;
+            margin: 0 10px;
+        }
+
+        .btn-primary {
+            background: #007bff;
+        }
+
+        .btn-primary:hover {
+            background: #0056b3;
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+        }
+
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+
+        .footer {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+            color: #999;
+            font-size: 14px;
+        }
+
+        .resend-form {
+            margin-top: 20px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+
+        .resend-form input[type="email"] {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin-bottom: 10px;
+        }
+
+        .resend-form button {
+            background: #28a745;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .resend-form button:hover {
+            background: #218838;
+        }
+
+        .loading {
+            display: none;
+            color: #007bff;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="error-icon">⚠</div>
+        
+        <h1>Email Verification Failed</h1>
+        
+        <p>We couldn't verify your email address. This usually happens when:</p>
+        
+        <div class="error-details" id="errorDetails">
+            <strong>Error:</strong> <span id="errorMessage">Unknown error</span>
+        </div>
+        
+        <div class="solutions">
+            <h3>What can you do?</h3>
+            <ul>
+                <li><strong>Expired Link:</strong> Verification links expire after 24 hours</li>
+                <li><strong>Already Used:</strong> Each verification link can only be used once</li>
+                <li><strong>Invalid Link:</strong> The link may have been corrupted</li>
+            </ul>
+        </div>
+
+        <div class="resend-form">
+            <h3>Request New Verification Email</h3>
+            <input type="email" id="emailInput" placeholder="Enter your email address" required>
+            <button onclick="resendVerification()">
+                <span class="loading" id="loading">Sending...</span>
+                <span id="buttonText">Send New Verification Email</span>
+            </button>
+            <div id="resendMessage" style="margin-top: 10px;"></div>
+        </div>
+        
+        <div class="actions">
+            <a href="/register" class="btn btn-primary">Register Again</a>
+            <a href="/login" class="btn btn-secondary">Try Login</a>
+        </div>
+        
+        <div class="footer">
+            <p>Need help? Contact our support team at support@cryptominepro.com</p>
+            <p>&copy; 2025 CryptoMinePro. All rights reserved.</p>
+        </div>
+    </div>
+
+    <script>
+        // Parse URL parameters to show specific error message
+        const urlParams = new URLSearchParams(window.location.search);
+        const error = urlParams.get('error');
+
+        const errorMessages = {
+            'missing_token': 'Verification link is missing required information',
+            'invalid_or_expired_token': 'Verification link has expired or is invalid',
+            'invalid_token': 'Invalid verification token',
+            'already_verified': 'This email address is already verified'
+        };
+
+        const errorMessage = errorMessages[error] || 'Unknown verification error';
+        document.getElementById('errorMessage').textContent = errorMessage;
+
+        // Auto-fill email if provided in URL
+        const email = urlParams.get('email');
+        if (email) {
+            document.getElementById('emailInput').value = decodeURIComponent(email);
+        }
+
+        // Function to resend verification email (NO MetaMask code!)
+        async function resendVerification() {
+            const emailInput = document.getElementById('emailInput');
+            const email = emailInput.value.trim();
+            
+            if (!email) {
+                alert('Please enter your email address');
+                return;
+            }
+
+            // Show loading state
+            document.getElementById('loading').style.display = 'inline';
+            document.getElementById('buttonText').style.display = 'none';
+            
+            try {
+                const response = await fetch('http://localhost:3000/api/users/resend-verification', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ email: email })
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    document.getElementById('resendMessage').innerHTML = 
+                        '<div style="color: #28a745; padding: 10px; background: #d4edda; border-radius: 4px;">' +
+                        '✅ Verification email sent successfully! Check your inbox.' +
+                        '</div>';
+                } else {
+                    document.getElementById('resendMessage').innerHTML = 
+                        '<div style="color: #dc3545; padding: 10px; background: #f8d7da; border-radius: 4px;">' +
+                        '❌ ' + (data.message || 'Failed to send verification email') +
+                        '</div>';
+                }
+            } catch (error) {
+                document.getElementById('resendMessage').innerHTML = 
+                    '<div style="color: #dc3545; padding: 10px; background: #f8d7da; border-radius: 4px;">' +
+                    '❌ Network error. Please try again.' +
+                    '</div>';
+            } finally {
+                // Hide loading state
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('buttonText').style.display = 'inline';
+            }
+        }
+
+        // Log error for debugging (NO MetaMask code here!)
+        console.log('Email verification error:', error);
+    </script>
+</body>
+</html>

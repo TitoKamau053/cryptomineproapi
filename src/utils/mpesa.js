@@ -7,8 +7,8 @@ const mpesaConfig = {
   consumerSecret: process.env.MPESA_CONSUMER_SECRET,
   shortcode: process.env.MPESA_SHORTCODE,
   passkey: process.env.MPESA_PASSKEY,
-  environment: process.env.MPESA_ENV || 'sandbox', // 'sandbox' or 'production'
-  callbackUrl: process.env.MPESA_STK_CALLBACK_URL, // Fixed to match .env variable
+  environment: process.env.MPESA_ENV,
+  callbackUrl: process.env.MPESA_STK_CALLBACK_URL, 
   initiatorName: process.env.MPESA_INITIATOR_NAME,
   securityCredential: process.env.MPESA_SECURITY_CREDENTIAL,
   b2cResultUrl: process.env.B2C_RESULT_URL,

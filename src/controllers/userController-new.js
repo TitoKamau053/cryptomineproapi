@@ -77,27 +77,13 @@ const register = async (req, res) => {
       [userId, verificationToken, expiresAt]
     );
 
-    // Send verification email with proper error handling
-    try {
-      await sendVerificationEmail(email, full_name, verificationToken);
-      console.log('✅ Verification email sent successfully to:', email);
-      
-      res.status(201).json({
-        message: 'Registration successful. Please check your email to verify your account.',
-        userId: userId,
-        emailSent: true
-      });
-    } catch (emailError) {
-      console.error('❌ Email sending failed:', emailError.message);
-      
-      // Registration still successful even if email fails
-      res.status(201).json({
-        message: 'Registration successful. However, there was an issue sending the verification email. You can request a new verification email from the login page.',
-        userId: userId,
-        emailSent: false,
-        emailError: 'Email delivery failed - please use resend verification option'
-      });
-    }
+    // Send verification email
+    await sendVerificationEmail(email, full_name, verificationToken);
+
+    res.status(201).json({
+      message: 'Registration successful. Please check your email to verify your account.',
+      userId: userId
+    });
 
   } catch (error) {
     console.error('Registration error:', error);
@@ -171,8 +157,7 @@ const verifyEmail = async (req, res) => {
   const { token } = req.query;
 
   if (!token) {
-    const frontendUrl = process.env.APP_BASE_URL || 'https://cryptominepro.vercel.app';
-    return res.redirect(`${frontendUrl}/verification-error?error=missing_token`);
+    return res.status(400).json({ message: 'Verification token is required' });
   }
 
   try {
@@ -186,8 +171,7 @@ const verifyEmail = async (req, res) => {
     );
 
     if (tokens.length === 0) {
-      const frontendUrl = process.env.APP_BASE_URL || 'https://cryptominepro.vercel.app';
-      return res.redirect(`${frontendUrl}/verification-error?error=invalid_or_expired_token`);
+      return res.status(400).json({ message: 'Invalid or expired verification token' });
     }
 
     const { user_id, email, full_name } = tokens[0];
@@ -195,8 +179,7 @@ const verifyEmail = async (req, res) => {
     // Check if already verified
     const [users] = await pool.query('SELECT email_verified FROM users WHERE id = ?', [user_id]);
     if (users[0].email_verified) {
-      const frontendUrl = process.env.APP_BASE_URL || 'https://cryptominepro.vercel.app';
-      return res.redirect(`${frontendUrl}/verification-success?verified=true&already_verified=true&email=${encodeURIComponent(email)}`);
+      return res.status(400).json({ message: 'Email is already verified' });
     }
 
     // Mark user as verified
@@ -211,16 +194,11 @@ const verifyEmail = async (req, res) => {
     // Send welcome email
     await sendWelcomeEmail(email, full_name);
 
-    // Redirect to frontend with success message
-    const frontendUrl = process.env.APP_BASE_URL || 'https://cryptominepro.vercel.app';
-    res.redirect(`${frontendUrl}/verification-success?verified=true&email=${encodeURIComponent(email)}`);
+    res.json({ message: 'Email verified successfully' });
 
   } catch (error) {
     console.error('Email verification error:', error);
-    
-    // Redirect to frontend with error message
-    const frontendUrl = process.env.APP_BASE_URL || 'https://cryptominepro.vercel.app';
-    res.redirect(`${frontendUrl}/verification-error?error=invalid_token`);
+    res.status(500).json({ message: 'Internal server error' });
   }
 };
 
@@ -228,14 +206,8 @@ const verifyEmail = async (req, res) => {
 const resendVerification = async (req, res) => {
   const { email } = req.body;
 
-  // Log the request for debugging
-  console.log('Resend verification request:', { email, body: req.body });
-
   if (!email) {
-    return res.status(400).json({ 
-      success: false,
-      message: 'Email is required' 
-    });
+    return res.status(400).json({ message: 'Email is required' });
   }
 
   try {
@@ -246,20 +218,13 @@ const resendVerification = async (req, res) => {
     );
 
     if (users.length === 0) {
-      return res.status(404).json({ 
-        success: false,
-        message: 'User not found' 
-      });
+      return res.status(404).json({ message: 'User not found' });
     }
 
     const user = users[0];
 
     if (user.email_verified) {
-      return res.status(200).json({ 
-        success: true,
-        message: 'Email is already verified',
-        already_verified: true
-      });
+      return res.status(400).json({ message: 'Email is already verified' });
     }
 
     // Delete any existing tokens for this user
@@ -275,32 +240,14 @@ const resendVerification = async (req, res) => {
       [user.id, verificationToken, expiresAt]
     );
 
-    // Send verification email with retry logic
-    try {
-      await sendVerificationEmail(user.email, user.full_name, verificationToken);
-      console.log('✅ Verification email sent successfully to:', email);
-      
-      res.json({ 
-        success: true,
-        message: 'Verification email sent successfully' 
-      });
-    } catch (emailError) {
-      console.error('❌ Email sending failed:', emailError.message);
-      
-      // Still return success to prevent frontend loops, but with a helpful message
-      res.json({ 
-        success: true,
-        message: 'Verification email queued for delivery. If you don\'t receive it within 10 minutes, please contact support.',
-        email_error: true
-      });
-    }
+    // Send verification email
+    await sendVerificationEmail(user.email, user.full_name, verificationToken);
+
+    res.json({ message: 'Verification email sent successfully' });
 
   } catch (error) {
     console.error('Resend verification error:', error);
-    res.status(500).json({ 
-      success: false,
-      message: 'Internal server error' 
-    });
+    res.status(500).json({ message: 'Internal server error' });
   }
 };
 
@@ -344,63 +291,10 @@ const getUserProfile = async (req, res) => {
   }
 };
 
-// Get user verification status
-const getVerificationStatus = async (req, res) => {
-  try {
-    const { email } = req.query;
-
-    // Log for debugging
-    console.log('Verification status check for:', email);
-
-    if (!email) {
-      return res.status(400).json({
-        success: false,
-        message: 'Email is required'
-      });
-    }
-
-    const query = 'SELECT email_verified, email_verified_at FROM users WHERE email = ?';
-    
-    const [results] = await pool.query(query, [email]);
-
-    if (results.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: 'User not found'
-      });
-    }
-
-    const user = results[0];
-    
-    // Add cache headers to prevent excessive polling
-    res.set({
-      'Cache-Control': 'no-cache, no-store, must-revalidate',
-      'Pragma': 'no-cache',
-      'Expires': '0'
-    });
-    
-    res.json({
-      success: true,
-      data: {
-        email_verified: user.email_verified,
-        email_verified_at: user.email_verified_at,
-        is_verified: user.email_verified === 1
-      }
-    });
-  } catch (error) {
-    console.error('Error checking verification status:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Internal server error'
-    });
-  }
-};
-
 module.exports = {
   register,
   login,
   verifyEmail,
   resendVerification,
-  getUserProfile,
-  getVerificationStatus
+  getUserProfile
 };

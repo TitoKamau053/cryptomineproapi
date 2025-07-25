@@ -6,12 +6,12 @@ const createTransporter = async () => {
   const host = process.env.SMTP_HOST || 'smtp.gmail.com';
   const port = parseInt(process.env.SMTP_PORT) || 587;
   const secure = port === 465; // true for 465, false for other ports
-  const username = process.env.SMTP_USERNAME || process.env.SMTP_USER || '';
-  const password = process.env.SMTP_PASSWORD || process.env.SMTP_PASS || '';
+  const username = process.env.SMTP_USER || '';
+  const password = process.env.SMTP_PASS || '';
 
   console.log('Email config:', { host, port, secure, username: username ? '***set***' : 'missing', password: password ? '***set***' : 'missing' });
 
-  return nodemailer.createTransport({
+  return nodemailer.createTransporter({
     host,
     port,
     secure,
@@ -20,22 +20,8 @@ const createTransporter = async () => {
       pass: password,
     },
     tls: {
-      rejectUnauthorized: false,
-      ciphers: 'SSLv3'
-    },
-    // Gmail-specific connection options to fix ECONNRESET
-    pool: false, // Disable connection pooling to avoid connection reuse issues
-    maxConnections: 1,
-    maxMessages: 1, // Send one message per connection
-    rateDelta: 2000, // Increased delay between messages
-    rateLimit: 3, // Reduced rate limit
-    connectionTimeout: 60000, // 60s
-    greetingTimeout: 30000,   // 30s
-    socketTimeout: 60000,     // 60s
-    // Additional Gmail-specific settings
-    requireTLS: true,
-    debug: false, // Set to true for debugging
-    logger: false
+      rejectUnauthorized: false // For development - remove in production
+    }
   });
 };
 
@@ -46,9 +32,9 @@ const sendVerificationEmail = async (email, name, verificationToken) => {
     const fromAddress = process.env.EMAIL_FROM_ADDRESS || 'noreply@cryptominepro.com';
     const fromName = process.env.EMAIL_FROM_NAME || 'CryptoMinePro';
     
-    // Use direct backend verification that redirects to frontend
-    const backendUrl = process.env.BACKEND_URL || 'http://localhost:3000';
-    const verificationLink = `${backendUrl}/api/users/verify-email?token=${verificationToken}`;
+    // Use the APP_BASE_URL for frontend verification
+    const appBaseUrl = process.env.APP_BASE_URL || 'https://cryptominepro.vercel.app';
+    const verificationLink = `${appBaseUrl}/verify-email?token=${verificationToken}`;
     
     const mailOptions = {
       from: `"${fromName}" <${fromAddress}>`,

@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const withdrawalController = require('../controllers/withdrawalController');
 const authMiddleware = require('../middleware/authMiddleware');
+const { checkEmailVerification } = require('../middleware/emailVerificationMiddleware');
 
 // Middleware to check admin role
 const requireAdmin = (req, res, next) => {
@@ -12,8 +13,8 @@ const requireAdmin = (req, res, next) => {
 };
 
 // User routes
-// User requests withdrawal
-router.post('/request', authMiddleware.verifyToken, withdrawalController.requestWithdrawal);
+// User requests withdrawal (requires email verification)
+router.post('/request', authMiddleware.verifyToken, checkEmailVerification, withdrawalController.requestWithdrawal);
 
 // User views their withdrawals
 router.get('/', authMiddleware.verifyToken, withdrawalController.getUserWithdrawals);

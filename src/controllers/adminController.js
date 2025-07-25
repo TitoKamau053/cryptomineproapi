@@ -203,21 +203,56 @@ const updateUserStatus = async (req, res) => {
     const { status, reason } = req.body;
     const adminId = req.user.id;
     
-    if (!['active', 'suspended', 'pending'].includes(status)) {
-      return res.status(400).json({ message: 'Invalid status' });
+    // Debug logging
+    console.log('updateUserStatus called with:', { userId, status, reason, adminId });
+    console.log('Request body:', req.body);
+    console.log('Request params:', req.params);
+    console.log('User object:', req.user);
+    
+    // Validate required fields
+    if (!status) {
+      console.log('Status validation failed: status is required');
+      return res.status(400).json({ message: 'Status is required' });
+    }
+    
+    if (!['active', 'suspended', 'pending', 'deactivated'].includes(status)) {
+      console.log('Status validation failed: invalid status value:', status);
+      return res.status(400).json({ message: 'Invalid status. Must be one of: active, suspended, pending, deactivated' });
+    }
+    
+    // Map 'deactivated' to 'suspended' for database compatibility
+    // Since the database ENUM only supports ('active', 'suspended', 'pending')
+    const dbStatus = status === 'deactivated' ? 'suspended' : status;
+    
+    // Check if user exists
+    const [userCheck] = await pool.query('SELECT id FROM users WHERE id = ?', [userId]);
+    if (userCheck.length === 0) {
+      console.log('User not found with ID:', userId);
+      return res.status(404).json({ message: 'User not found' });
+    }
+    
+    // Validate admin user exists
+    if (!adminId) {
+      console.log('Admin ID not found in request');
+      return res.status(401).json({ message: 'Admin user not found' });
     }
     
     await pool.query(`
       UPDATE users 
       SET status = ?, updated_at = CURRENT_TIMESTAMP 
       WHERE id = ?
-    `, [status, userId]);
+    `, [dbStatus, userId]);
     
-    // Log admin action
-    await pool.query(`
-      INSERT INTO admin_logs (admin_id, action, target_type, target_id, details, created_at)
-      VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-    `, [adminId, `user_status_update`, 'user', userId, JSON.stringify({ status, reason })]);
+    // Log admin action (if table exists)
+    try {
+      await pool.query(`
+        INSERT INTO admin_logs (admin_id, action, target_type, target_id, details, created_at)
+        VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+      `, [adminId, 'user_status_update', 'user', userId, JSON.stringify({ status, reason })]);
+    } catch (logError) {
+      console.warn('Failed to log admin action:', logError.message);
+      // Continue execution even if logging fails
+    }
     
     res.json({ message: 'User status updated successfully' });
   } catch (error) {
