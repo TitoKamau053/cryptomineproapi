@@ -3,6 +3,11 @@ const router = express.Router();
 const referralController = require('../controllers/referralController');
 const authMiddleware = require('../middleware/authMiddleware');
 
+// Public routes (no authentication required)
+// Validate referral code for signup page
+router.get('/validate/:referral_code', referralController.validateReferralCode);
+
+// Protected routes (authentication required)
 // User views referral info and commissions
 router.get('/', authMiddleware.verifyToken, referralController.getReferralInfo);
 

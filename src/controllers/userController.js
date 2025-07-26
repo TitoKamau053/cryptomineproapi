@@ -69,6 +69,15 @@ const register = async (req, res) => {
 
     // Generate verification token
     const verificationToken = generateVerificationToken();
+    if (!verificationToken) {
+      throw new Error('Failed to generate verification token');
+    }
+    
+    console.log('Generated verification token:', { 
+      tokenLength: verificationToken.length,
+      tokenPreview: verificationToken.substring(0, 10) + '...'
+    });
+    
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
     // Save verification token
@@ -107,21 +116,21 @@ const register = async (req, res) => {
 
 // Login user
 const login = async (req, res) => {
-  const { email, password } = req.body;
+  const { phone, password } = req.body;
 
-  if (!email || !password) {
-    return res.status(400).json({ message: 'Email and password are required' });
+  if (!phone || !password) {
+    return res.status(400).json({ message: 'Phone and password are required' });
   }
 
   try {
     // Get user from database
     const [users] = await pool.query(
-      'SELECT id, email, password_hash, full_name, role, status, email_verified FROM users WHERE email = ?',
-      [email]
+      'SELECT id, email, password_hash, full_name, role, status, email_verified FROM users WHERE phone = ?',
+      [phone]
     );
 
     if (users.length === 0) {
-      return res.status(401).json({ message: 'Invalid email or password' });
+      return res.status(401).json({ message: 'Invalid phone or password' });
     }
 
     const user = users[0];
@@ -129,7 +138,7 @@ const login = async (req, res) => {
     // Check password
     const passwordMatch = await bcrypt.compare(password, user.password_hash);
     if (!passwordMatch) {
-      return res.status(401).json({ message: 'Invalid email or password' });
+      return res.status(401).json({ message: 'Invalid phone or password' });
     }
 
     // Check if account is active
@@ -170,9 +179,15 @@ const login = async (req, res) => {
 const verifyEmail = async (req, res) => {
   const { token } = req.query;
 
+  console.log('Verification request received:', { token: token ? 'present' : 'missing', query: req.query, url: req.originalUrl });
+
   if (!token) {
-    const frontendUrl = process.env.APP_BASE_URL || 'https://cryptominepro.vercel.app';
-    return res.redirect(`${frontendUrl}/verification-error?error=missing_token`);
+    console.log('❌ Missing token in verification request');
+    return res.status(400).json({
+      success: false,
+      message: 'Verification token is required',
+      error: 'missing_token'
+    });
   }
 
   try {
@@ -185,9 +200,15 @@ const verifyEmail = async (req, res) => {
       [token]
     );
 
+    console.log('Token lookup result:', { tokenFound: tokens.length > 0, token: token.substring(0, 10) + '...' });
+
     if (tokens.length === 0) {
-      const frontendUrl = process.env.APP_BASE_URL || 'https://cryptominepro.vercel.app';
-      return res.redirect(`${frontendUrl}/verification-error?error=invalid_or_expired_token`);
+      console.log('❌ Invalid or expired token');
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid or expired verification token',
+        error: 'invalid_or_expired_token'
+      });
     }
 
     const { user_id, email, full_name } = tokens[0];
@@ -195,8 +216,16 @@ const verifyEmail = async (req, res) => {
     // Check if already verified
     const [users] = await pool.query('SELECT email_verified FROM users WHERE id = ?', [user_id]);
     if (users[0].email_verified) {
-      const frontendUrl = process.env.APP_BASE_URL || 'https://cryptominepro.vercel.app';
-      return res.redirect(`${frontendUrl}/verification-success?verified=true&already_verified=true&email=${encodeURIComponent(email)}`);
+      console.log('✅ Email already verified for user:', email);
+      return res.json({
+        success: true,
+        message: 'Email already verified',
+        data: {
+          email: email,
+          already_verified: true,
+          verified_at: users[0].email_verified_at
+        }
+      });
     }
 
     // Mark user as verified
@@ -208,19 +237,36 @@ const verifyEmail = async (req, res) => {
     // Delete the verification token
     await pool.query('DELETE FROM email_verification_tokens WHERE token = ?', [token]);
 
-    // Send welcome email
-    await sendWelcomeEmail(email, full_name);
+    console.log('✅ Email verified successfully for user:', email);
 
-    // Redirect to frontend with success message
-    const frontendUrl = process.env.APP_BASE_URL || 'https://cryptominepro.vercel.app';
-    res.redirect(`${frontendUrl}/verification-success?verified=true&email=${encodeURIComponent(email)}`);
+    // Send welcome email
+    try {
+      await sendWelcomeEmail(email, full_name);
+      console.log('✅ Welcome email sent to:', email);
+    } catch (welcomeEmailError) {
+      console.error('❌ Welcome email failed (but verification successful):', welcomeEmailError.message);
+    }
+
+    // Return JSON success response
+    res.json({
+      success: true,
+      message: 'Email verified successfully',
+      data: {
+        email: email,
+        full_name: full_name,
+        verified: true
+      }
+    });
 
   } catch (error) {
     console.error('Email verification error:', error);
     
-    // Redirect to frontend with error message
-    const frontendUrl = process.env.APP_BASE_URL || 'https://cryptominepro.vercel.app';
-    res.redirect(`${frontendUrl}/verification-error?error=invalid_token`);
+    // Return JSON error response
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error during email verification',
+      error: 'server_error'
+    });
   }
 };
 
@@ -267,6 +313,16 @@ const resendVerification = async (req, res) => {
 
     // Generate new verification token
     const verificationToken = generateVerificationToken();
+    if (!verificationToken) {
+      throw new Error('Failed to generate verification token');
+    }
+    
+    console.log('Generated new verification token:', { 
+      email,
+      tokenLength: verificationToken.length,
+      tokenPreview: verificationToken.substring(0, 10) + '...'
+    });
+    
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
     // Save new verification token

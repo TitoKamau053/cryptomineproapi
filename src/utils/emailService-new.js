@@ -33,7 +33,7 @@ const sendVerificationEmail = async (email, name, verificationToken) => {
     const fromName = process.env.EMAIL_FROM_NAME || 'CryptoMinePro';
     
     // Use the APP_BASE_URL for frontend verification
-    const appBaseUrl = process.env.APP_BASE_URL || 'https://cryptominepro.vercel.app';
+    const appBaseUrl = process.env.APP_BASE_URL;
     const verificationLink = `${appBaseUrl}/verify-email?token=${verificationToken}`;
     
     const mailOptions = {
@@ -134,7 +134,7 @@ const sendWelcomeEmail = async (email, name) => {
                   <li>Refer friends and earn commissions</li>
                 </ul>
                 <div style="text-align: center;">
-                  <a href="${process.env.APP_BASE_URL || 'https://cryptominepro.vercel.app'}/dashboard" class="button">Go to Dashboard</a>
+                  <a href="${process.env.APP_BASE_URL}/dashboard" class="button">Go to Dashboard</a>
                 </div>
                 <p>If you have any questions, our support team is here to help!</p>
               </div>

@@ -42,6 +42,18 @@ const createTransporter = async () => {
 // Send verification email
 const sendVerificationEmail = async (email, name, verificationToken) => {
   try {
+    // Validate parameters
+    if (!email || !verificationToken) {
+      throw new Error(`Missing required parameters: email=${!!email}, token=${!!verificationToken}`);
+    }
+
+    console.log('Sending verification email:', { 
+      email, 
+      name, 
+      tokenLength: verificationToken ? verificationToken.length : 0,
+      tokenPreview: verificationToken ? verificationToken.substring(0, 10) + '...' : 'undefined'
+    });
+
     const transporter = await createTransporter();
     const fromAddress = process.env.EMAIL_FROM_ADDRESS || 'noreply@cryptominepro.com';
     const fromName = process.env.EMAIL_FROM_NAME || 'CryptoMinePro';
@@ -49,6 +61,8 @@ const sendVerificationEmail = async (email, name, verificationToken) => {
     // Use direct backend verification that redirects to frontend
     const backendUrl = process.env.BACKEND_URL || 'http://localhost:3000';
     const verificationLink = `${backendUrl}/api/users/verify-email?token=${verificationToken}`;
+    
+    console.log('Generated verification link:', verificationLink);
     
     const mailOptions = {
       from: `"${fromName}" <${fromAddress}>`,
@@ -148,7 +162,7 @@ const sendWelcomeEmail = async (email, name) => {
                   <li>Refer friends and earn commissions</li>
                 </ul>
                 <div style="text-align: center;">
-                  <a href="${process.env.APP_BASE_URL || 'https://cryptominepro.vercel.app'}/dashboard" class="button">Go to Dashboard</a>
+                  <a href="${process.env.APP_BASE_URL}/dashboard" class="button">Go to Dashboard</a>
                 </div>
                 <p>If you have any questions, our support team is here to help!</p>
               </div>

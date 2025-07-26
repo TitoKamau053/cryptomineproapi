@@ -149,6 +149,146 @@ const getTimeAgo = (date) => {
   }
 };
 
+// Get user transactions with date filtering
+const getUserTransactions = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { period = 30, page = 1, limit = 20, type } = req.query;
+    const offset = (page - 1) * limit;
+    
+    // Calculate date range based on period
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - parseInt(period));
+    
+    const transactions = [];
+    
+    // Get deposits
+    if (!type || type === 'deposit') {
+      const [deposits] = await pool.query(`
+        SELECT 
+          'deposit' as type,
+          id,
+          amount,
+          status,
+          method,
+          COALESCE(transaction_id, CONCAT('DP', id)) as transaction_id,
+          created_at,
+          'Deposit' as description
+        FROM deposits 
+        WHERE user_id = ? AND created_at >= ?
+        ORDER BY created_at DESC
+      `, [userId, startDate]);
+      
+      transactions.push(...deposits);
+    }
+    
+    // Get withdrawals
+    if (!type || type === 'withdrawal') {
+      const [withdrawals] = await pool.query(`
+        SELECT 
+          'withdrawal' as type,
+          id,
+          amount,
+          status,
+          method,
+          CONCAT('WD', id) as transaction_id,
+          created_at,
+          'Withdrawal' as description
+        FROM withdrawals 
+        WHERE user_id = ? AND created_at >= ?
+        ORDER BY created_at DESC
+      `, [userId, startDate]);
+      
+      transactions.push(...withdrawals);
+    }
+    
+    // Get purchases
+    if (!type || type === 'purchase') {
+      const [purchases] = await pool.query(`
+        SELECT 
+          'purchase' as type,
+          p.id,
+          p.amount_invested as amount,
+          p.status,
+          'investment' as method,
+          CONCAT('PU', p.id) as transaction_id,
+          p.created_at,
+          CONCAT('Mining Engine: ', m.name) as description
+        FROM purchases p
+        JOIN mining_engines m ON p.engine_id = m.id
+        WHERE p.user_id = ? AND p.created_at >= ?
+        ORDER BY p.created_at DESC
+      `, [userId, startDate]);
+      
+      transactions.push(...purchases);
+    }
+    
+    // Get earnings
+    if (!type || type === 'earning') {
+      const [earnings] = await pool.query(`
+        SELECT 
+          'earning' as type,
+          el.id,
+          el.earning_amount as amount,
+          'completed' as status,
+          'mining' as method,
+          CONCAT('ER', el.id) as transaction_id,
+          el.earning_date as created_at,
+          'Mining Reward' as description
+        FROM engine_logs el 
+        WHERE el.user_id = ? AND el.earning_date >= ?
+        ORDER BY el.earning_date DESC
+      `, [userId, startDate]);
+      
+      transactions.push(...earnings);
+    }
+    
+    // Sort all transactions by date
+    transactions.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    
+    // Apply pagination
+    const paginatedTransactions = transactions.slice(offset, offset + parseInt(limit));
+    
+    // Format transactions for UI
+    const formattedTransactions = paginatedTransactions.map(transaction => ({
+      id: transaction.id,
+      type: transaction.type,
+      amount: parseFloat(transaction.amount),
+      status: transaction.status,
+      method: transaction.method,
+      description: transaction.description,
+      transaction_id: transaction.transaction_id,
+      created_at: transaction.created_at,
+      formatted_amount: `KES ${parseFloat(transaction.amount).toLocaleString('en-KE', { 
+        minimumFractionDigits: 2, 
+        maximumFractionDigits: 2 
+      })}`,
+      formatted_date: new Date(transaction.created_at).toLocaleDateString('en-KE', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      })
+    }));
+    
+    res.json({
+      transactions: formattedTransactions,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total: transactions.length,
+        pages: Math.ceil(transactions.length / limit)
+      },
+      period: parseInt(period)
+    });
+  } catch (error) {
+    console.error('Error fetching user transactions:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
 module.exports = {
-  getRecentActivities
+  getRecentActivities,
+  getUserTransactions
 };

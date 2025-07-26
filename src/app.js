@@ -28,6 +28,7 @@ const earningRoutes = require('./routes/earningRoutes');
 const referralRoutes = require('./routes/referralRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const mpesaRoutes = require('./routes/mpesaRoutes');
+const transactionRoutes = require('./routes/transactionRoutes');
 
 const { verifyToken } = require('./middleware/authMiddleware');
 const { verifyAdminRole } = require('./middleware/adminMiddleware');
@@ -43,14 +44,22 @@ app.use('/api/mining-engines', miningEngineRoutes);
 app.use('/api/purchases', purchaseRoutes);
 app.use('/api/earnings', earningRoutes);
 app.use('/api/mpesa', mpesaRoutes);
+app.use('/api/referrals', referralRoutes);  
 
 // Protected routes
 app.use('/api/deposits', verifyToken, depositRoutes);
 app.use('/api/withdrawals', verifyToken, withdrawalRoutes);
-app.use('/api/referrals', verifyToken, referralRoutes);
+app.use('/api/transactions', verifyToken, transactionRoutes);
 
 // Admin routes with admin role verification
 app.use('/api/admin', verifyToken, verifyAdminRole, adminRoutes);
+
+// Referral link redirect endpoint (redirects to frontend with referral code)
+app.get('/ref/:referral_code', (req, res) => {
+  const referralCode = req.params.referral_code.toUpperCase();
+  const frontendUrl = process.env.FRONTEND_URL || 'https://cryptominepro.vercel.app';
+  res.redirect(`${frontendUrl}/register?ref=${referralCode}`);
+});
 
 const PORT = process.env.PORT || 3000;
 
