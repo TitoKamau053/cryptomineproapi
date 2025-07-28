@@ -119,9 +119,22 @@ const mpesaDepositCallback = async (req, res) => {
       transactionId,
       status
     ]);
-    
+
     console.log(`Successfully updated deposit status for transaction ${transactionId} to ${status}`);
-    
+
+    // If deposit is successful, update user balance
+    if (status === 'completed' && amount && transactionId) {
+      // Find the user_id for this deposit
+      const [depositRows] = await pool.query('SELECT user_id FROM deposits WHERE transaction_id = ? LIMIT 1', [transactionId]);
+      if (depositRows.length > 0) {
+        const userId = depositRows[0].user_id;
+        await pool.query('UPDATE users SET balance = balance + ? WHERE id = ?', [amount, userId]);
+        console.log(`User ${userId} balance updated by ${amount} after successful deposit.`);
+      } else {
+        console.warn(`No deposit record found for transaction_id: ${transactionId}`);
+      }
+    }
+
     res.status(200).json({ message: 'Deposit status updated' });
   } catch (error) {
     console.error('Error updating deposit status:', error);
