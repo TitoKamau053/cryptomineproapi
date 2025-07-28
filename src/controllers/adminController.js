@@ -616,7 +616,7 @@ const createMiningEngine = async (req, res) => {
     const [result] = await pool.query(`
       INSERT INTO mining_engines (name, description, price, daily_earning_rate, duration_days, min_investment, max_investment, image_url, is_active, created_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, TRUE, CURRENT_TIMESTAMP)
-    `, [name, description, price, daily_earning_rate, duration_days, min_investment || 0, max_investment || 999999999.99, image_url]);
+    `, [name, description, price, daily_earning_rate, duration_days, min_investment || 0, 5000000, image_url]);
     
     // Log admin action
     await pool.query(`
@@ -648,12 +648,12 @@ const updateMiningEngine = async (req, res) => {
           daily_earning_rate = COALESCE(?, daily_earning_rate),
           duration_days = COALESCE(?, duration_days),
           min_investment = COALESCE(?, min_investment),
-          max_investment = COALESCE(?, max_investment),
+          max_investment = 5000000,
           image_url = COALESCE(?, image_url),
           is_active = COALESCE(?, is_active),
           updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
-    `, [name, description, price, daily_earning_rate, duration_days, min_investment, max_investment, image_url, is_active, engineId]);
+    `, [name, description, price, daily_earning_rate, duration_days, min_investment, image_url, is_active, engineId]);
     
     if (result.affectedRows === 0) {
       return res.status(404).json({ message: 'Mining engine not found' });

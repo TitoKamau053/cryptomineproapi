@@ -25,6 +25,12 @@ router.post('/approve/:withdrawalId', authMiddleware.verifyToken, requireAdmin, 
 // Admin rejects withdrawal
 router.post('/reject/:withdrawalId', authMiddleware.verifyToken, requireAdmin, withdrawalController.rejectWithdrawal);
 
+// Admin deletes withdrawal
+router.delete('/:withdrawalId', authMiddleware.verifyToken, requireAdmin, withdrawalController.deleteWithdrawal);
+
+// Admin marks withdrawal as completed
+router.post('/complete/:withdrawalId', authMiddleware.verifyToken, requireAdmin, withdrawalController.markWithdrawalCompleted);
+
 // M-Pesa callback URL for withdrawal confirmation (no auth required for callbacks)
 router.post('/mpesa-callback', withdrawalController.mpesaWithdrawalCallback);
 

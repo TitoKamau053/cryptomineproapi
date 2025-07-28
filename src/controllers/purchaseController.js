@@ -15,6 +15,10 @@ const purchaseEngine = async (req, res) => {
     const purchase = rows[0][0];
     res.status(201).json({ purchase });
   } catch (error) {
+    // Handle custom SQL errors (e.g., insufficient balance, min/max investment)
+    if (error && error.errno === 1644) { // SIGNAL SQLSTATE '45000'
+      return res.status(400).json({ message: error.sqlMessage || 'Purchase failed' });
+    }
     console.error('Error purchasing engine:', error);
     res.status(500).json({ message: 'Internal server error' });
   }

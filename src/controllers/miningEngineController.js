@@ -65,7 +65,7 @@ const addMiningEngine = async (req, res) => {
       daily_earning_rate, 
       duration_days, 
       min_investment || 0, 
-      max_investment || 999999999.99, 
+      5000000, 
       image_url || null
     ]);
 
@@ -132,7 +132,8 @@ const updateMiningEngine = async (req, res) => {
       values.push(duration_days); 
     }
     if (min_investment !== undefined) { updates.push('min_investment = ?'); values.push(min_investment); }
-    if (max_investment !== undefined) { updates.push('max_investment = ?'); values.push(max_investment); }
+    // Always set max_investment to 5,000,000
+    updates.push('max_investment = ?'); values.push(5000000);
     if (image_url !== undefined) { updates.push('image_url = ?'); values.push(image_url); }
     if (is_active !== undefined) { updates.push('is_active = ?'); values.push(is_active); }
     

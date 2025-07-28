@@ -59,11 +59,11 @@ const sendVerificationEmail = async (email, name, verificationToken) => {
     });
 
     const transporter = await createTransporter();
-    const fromAddress = process.env.EMAIL_FROM_ADDRESS || 'noreply@cryptominepro.com';
-    const fromName = process.env.EMAIL_FROM_NAME || 'CryptoMinePro';
+    const fromAddress = process.env.EMAIL_FROM_ADDRESS;
+    const fromName = process.env.EMAIL_FROM_NAME ;
     
     // Use direct backend verification that redirects to frontend
-    const backendUrl = process.env.BACKEND_URL || 'http://localhost:3000';
+    const backendUrl = process.env.BACKEND_URL;
     const verificationLink = `${backendUrl}/api/users/verify-email?token=${verificationToken}`;
     
     console.log('Generated verification link:', verificationLink);
@@ -203,8 +203,142 @@ const testEmailConfiguration = async () => {
   }
 };
 
+// Send withdrawal status notification
+const sendWithdrawalStatusEmail = async (email, name, withdrawalDetails) => {
+  try {
+    const transporter = await createTransporter();
+    const fromAddress = process.env.EMAIL_FROM_ADDRESS || 'noreply@cryptominepro.com';
+    const fromName = process.env.EMAIL_FROM_NAME || 'CryptoMinePro';
+    
+    let subject = '';
+    let content = '';
+    
+    // Format amount with 2 decimal places
+    const formattedAmount = parseFloat(withdrawalDetails.amount).toFixed(2);
+    
+    switch(withdrawalDetails.status) {
+      case 'approved':
+        subject = 'Your CryptoMinePro Withdrawal Has Been Approved';
+        content = `
+          <h2>Hello ${name || 'User'},</h2>
+          <p>Your withdrawal request for KES ${formattedAmount} has been approved and is being processed.</p>
+          <p>You will receive your funds shortly. You will be notified once the transaction is complete.</p>
+          <p>Withdrawal Details:</p>
+          <ul>
+            <li>Amount: KES ${formattedAmount}</li>
+            <li>Method: ${withdrawalDetails.method || 'Bank Transfer/M-Pesa'}</li>
+            <li>Request Date: ${new Date(withdrawalDetails.created_at).toLocaleString()}</li>
+            <li>Approval Date: ${new Date(withdrawalDetails.approved_at || Date.now()).toLocaleString()}</li>
+          </ul>
+        `;
+        break;
+      
+      case 'rejected':
+        subject = 'Your CryptoMinePro Withdrawal Has Been Rejected';
+        content = `
+          <h2>Hello ${name || 'User'},</h2>
+          <p>We regret to inform you that your withdrawal request for KES ${formattedAmount} has been rejected.</p>
+          <p>The requested amount has been returned to your CryptoMinePro account balance.</p>
+          <p>Withdrawal Details:</p>
+          <ul>
+            <li>Amount: KES ${formattedAmount}</li>
+            <li>Method: ${withdrawalDetails.method || 'Bank Transfer/M-Pesa'}</li>
+            <li>Request Date: ${new Date(withdrawalDetails.created_at).toLocaleString()}</li>
+            <li>Rejection Date: ${new Date().toLocaleString()}</li>
+          </ul>
+          ${withdrawalDetails.admin_notes ? `<p>Reason for rejection: ${withdrawalDetails.admin_notes}</p>` : ''}
+          <p>If you have any questions about this decision, please contact our support team.</p>
+        `;
+        break;
+      
+      case 'completed':
+        subject = 'Your CryptoMinePro Withdrawal Has Been Completed';
+        content = `
+          <h2>Hello ${name || 'User'},</h2>
+          <p>Good news! Your withdrawal for KES ${formattedAmount} has been successfully completed.</p>
+          <p>The funds should now be available in your account.</p>
+          <p>Withdrawal Details:</p>
+          <ul>
+            <li>Amount: KES ${formattedAmount}</li>
+            <li>Method: ${withdrawalDetails.method || 'Bank Transfer/M-Pesa'}</li>
+            <li>Request Date: ${new Date(withdrawalDetails.created_at).toLocaleString()}</li>
+            <li>Completion Date: ${new Date(withdrawalDetails.processed_at || Date.now()).toLocaleString()}</li>
+            ${withdrawalDetails.transaction_id ? `<li>Transaction ID: ${withdrawalDetails.transaction_id}</li>` : ''}
+          </ul>
+          <p>Thank you for using CryptoMinePro!</p>
+        `;
+        break;
+      
+      default:
+        subject = 'Update on Your CryptoMinePro Withdrawal';
+        content = `
+          <h2>Hello ${name || 'User'},</h2>
+          <p>There has been an update to your withdrawal request for KES ${formattedAmount}.</p>
+          <p>Current status: ${withdrawalDetails.status || 'Under review'}</p>
+          <p>Withdrawal Details:</p>
+          <ul>
+            <li>Amount: KES ${formattedAmount}</li>
+            <li>Method: ${withdrawalDetails.method || 'Bank Transfer/M-Pesa'}</li>
+            <li>Request Date: ${new Date(withdrawalDetails.created_at).toLocaleString()}</li>
+          </ul>
+          <p>You can check the status of your withdrawal in your account dashboard.</p>
+        `;
+    }
+    
+    const mailOptions = {
+      from: `"${fromName}" <${fromAddress}>`,
+      to: email,
+      subject,
+      html: `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>${subject}</title>
+            <style>
+              body { font-family: Arial, sans-serif; line-height: 1.6; margin: 0; padding: 20px; background-color: #f4f4f4; }
+              .container { max-width: 600px; margin: 0 auto; background: white; border-radius: 10px; overflow: hidden; box-shadow: 0 0 10px rgba(0,0,0,.1); }
+              .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; text-align: center; }
+              .content { padding: 30px; }
+              .button { display: inline-block; background: #28a745; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; margin: 20px 0; }
+              .footer { background: #f8f9fa; padding: 20px; text-align: center; color: #666; font-size: 12px; }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <div class="header">
+                <h1>CryptoMinePro Withdrawal Update</h1>
+              </div>
+              <div class="content">
+                ${content}
+                <div style="text-align: center;">
+                  <a href="${process.env.APP_BASE_URL}/dashboard/withdrawals" class="button">View Withdrawal History</a>
+                </div>
+              </div>
+              <div class="footer">
+                <p>© ${new Date().getFullYear()} CryptoMinePro. All rights reserved.</p>
+                <p>This is an automated email, please do not reply.</p>
+              </div>
+            </div>
+          </body>
+        </html>
+      `
+    };
+
+    const result = await transporter.sendMail(mailOptions);
+    console.log(`Withdrawal ${withdrawalDetails.status} email sent successfully:`, result.messageId);
+    return result;
+  } catch (error) {
+    console.error(`Error sending withdrawal ${withdrawalDetails.status} email:`, error);
+    // Don't throw, just log the error so the process can continue
+    return null;
+  }
+};
+
 module.exports = {
   sendVerificationEmail,
   sendWelcomeEmail,
+  sendWithdrawalStatusEmail,
   testEmailConfiguration
 };

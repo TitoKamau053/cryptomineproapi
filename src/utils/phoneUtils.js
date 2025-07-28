@@ -26,6 +26,14 @@ const formatPhoneForMpesa = (phone) => {
     return cleanPhone.substring(1);
   }
   
+  // Log formatted number for debugging
+  console.log(`Original phone: ${phone}, formatted: ${cleanPhone}`);
+  
+  // Validate the final number format (must be 12 digits starting with 254)
+  if (!/^254\d{9}$/.test(cleanPhone)) {
+    console.warn(`Warning: Phone number ${cleanPhone} may not be in the correct format for M-Pesa`);
+  }
+  
   return cleanPhone;
 };
 
