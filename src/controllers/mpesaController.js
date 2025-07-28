@@ -1,6 +1,7 @@
 const pool = require('../db');
 const axios = require('axios');
 const moment = require('moment');
+const { formatPhoneForMpesa, formatPhoneForDisplay } = require('../utils/phoneUtils');
 require('dotenv').config();
 
 // Get M-Pesa Access Token
@@ -27,15 +28,18 @@ async function requestSTKPush(req, res) {
     const timestamp = moment().format('YYYYMMDDHHmmss');
     const password = Buffer.from(process.env.MPESA_SHORTCODE + process.env.MPESA_PASSKEY + timestamp).toString('base64');
 
+    // Format phone number for M-Pesa API
+    const formattedPhone = formatPhoneForMpesa(phone);
+
     const payload = {
       BusinessShortCode: process.env.MPESA_SHORTCODE,
       Password: password,
       Timestamp: timestamp,
       TransactionType: "CustomerPayBillOnline",
       Amount: amount,
-      PartyA: phone,
+      PartyA: formattedPhone,
       PartyB: process.env.MPESA_SHORTCODE,
-      PhoneNumber: phone,
+      PhoneNumber: formattedPhone,
       CallBackURL: process.env.MPESA_STK_CALLBACK_URL,
       AccountReference: accountRef,
       TransactionDesc: process.env.MPESA_TRANSACTION_DESC || "Deposit"
@@ -53,7 +57,7 @@ async function requestSTKPush(req, res) {
     await pool.query(`
       INSERT INTO mpesa_transactions (phone, amount, status, checkoutRequestId)
       VALUES (?, ?, ?, ?)
-    `, [phone, amount, 'PENDING', response.data.CheckoutRequestID]);
+    `, [formattedPhone, amount, 'PENDING', response.data.CheckoutRequestID]);
 
     res.json(response.data);
   } catch (error) {
@@ -133,13 +137,16 @@ async function b2cPayment(req, res) {
   try {
     const token = await getAccessToken();
 
+    // Format phone number for M-Pesa API
+    const formattedPhone = formatPhoneForMpesa(phone);
+
     const payload = {
       InitiatorName: process.env.MPESA_INITIATOR_NAME,
       SecurityCredential: process.env.MPESA_SECURITY_CREDENTIAL,
       CommandID: "BusinessPayment",
       Amount: amount,
       PartyA: process.env.MPESA_SHORTCODE,
-      PartyB: phone,
+      PartyB: formattedPhone,
       Remarks: "User Withdrawal",
       QueueTimeOutURL: process.env.B2C_TIMEOUT_URL,
       ResultURL: process.env.B2C_RESULT_URL,
@@ -157,7 +164,7 @@ async function b2cPayment(req, res) {
     await pool.query(`
       INSERT INTO mpesa_payouts (phone, amount, status)
       VALUES (?, ?, ?)
-    `, [phone, amount, 'PENDING']);
+    `, [formattedPhone, amount, 'PENDING']);
 
     res.json(response.data);
   } catch (error) {

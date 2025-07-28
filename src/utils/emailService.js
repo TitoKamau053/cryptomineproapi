@@ -1,3 +1,7 @@
+// EMAIL VERIFICATION DISABLED
+// This service is no longer used as email verification has been removed
+// Users are automatically verified upon registration
+
 require('dotenv').config();
 const nodemailer = require('nodemailer');
 

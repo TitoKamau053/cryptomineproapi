@@ -1,5 +1,6 @@
 const axios = require('axios');
 const qs = require('qs');
+const { formatPhoneForMpesa } = require('./phoneUtils');
 require('dotenv').config();
 
 const mpesaConfig = {
@@ -45,15 +46,18 @@ const stkPush = async (phoneNumber, amount, accountReference, transactionDesc) =
   const timestamp = new Date().toISOString().replace(/[-T:.Z]/g, '').slice(0, 14);
   const password = Buffer.from(mpesaConfig.shortcode + mpesaConfig.passkey + timestamp).toString('base64');
 
+  // Format phone number for M-Pesa API
+  const formattedPhone = formatPhoneForMpesa(phoneNumber);
+
   const data = {
     BusinessShortCode: mpesaConfig.shortcode,
     Password: password,
     Timestamp: timestamp,
     TransactionType: 'CustomerPayBillOnline',
     Amount: amount,
-    PartyA: phoneNumber,
+    PartyA: formattedPhone,
     PartyB: mpesaConfig.shortcode,
-    PhoneNumber: phoneNumber,
+    PhoneNumber: formattedPhone,
     CallBackURL: mpesaConfig.callbackUrl,
     AccountReference: accountReference,
     TransactionDesc: transactionDesc
@@ -79,13 +83,16 @@ const b2cPayment = async (phoneNumber, amount, accountReference, transactionDesc
     ? 'https://api.safaricom.co.ke/mpesa/b2c/v1/paymentrequest'
     : 'https://sandbox.safaricom.co.ke/mpesa/b2c/v1/paymentrequest';
 
+  // Format phone number for M-Pesa API
+  const formattedPhone = formatPhoneForMpesa(phoneNumber);
+
   const data = {
     InitiatorName: mpesaConfig.initiatorName,
     SecurityCredential: mpesaConfig.securityCredential,
     CommandID: 'BusinessPayment',
     Amount: amount,
     PartyA: mpesaConfig.shortcode,
-    PartyB: phoneNumber,
+    PartyB: formattedPhone,
     Remarks: transactionDesc || 'User Withdrawal',
     QueueTimeOutURL: mpesaConfig.b2cTimeoutUrl,
     ResultURL: mpesaConfig.b2cResultUrl,

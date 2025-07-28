@@ -1,5 +1,6 @@
 const pool = require('../db');
 const mpesaController = require('../controllers/mpesaController');
+const { formatPhoneForMpesa, formatPhoneForDisplay, isValidKenyanPhone } = require('../utils/phoneUtils');
 
 // Helper function to get system setting
 const getSystemSetting = async (settingKey) => {
@@ -89,8 +90,18 @@ const requestWithdrawal = async (req, res) => {
 
     // Validate account details based on type
     const accountType = account_details.type || 'mpesa';
-    if (accountType === 'mpesa' && !account_details.phone) {
-      return res.status(400).json({ message: 'Phone number is required for M-Pesa withdrawals' });
+    if (accountType === 'mpesa') {
+      if (!account_details.phone) {
+        return res.status(400).json({ message: 'Phone number is required for M-Pesa withdrawals' });
+      }
+      // Validate phone number format
+      if (!isValidKenyanPhone(account_details.phone)) {
+        return res.status(400).json({ 
+          message: 'Invalid phone number format. Use 0711111111 or 0111111111 format' 
+        });
+      }
+      // Format phone number for consistency
+      account_details.phone = formatPhoneForDisplay(account_details.phone);
     }
     if (accountType === 'bank' && (!account_details.account_number || !account_details.bank_name)) {
       return res.status(400).json({ message: 'Account number and bank name are required for bank withdrawals' });

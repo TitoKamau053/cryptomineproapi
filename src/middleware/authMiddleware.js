@@ -11,9 +11,9 @@ const verifyToken = async (req, res, next) => {
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     
-    // Get user from database
+    // Get user from database (removed email_verified from query)
     const [userRows] = await pool.query(
-      'SELECT id, email, full_name, role, status, email_verified FROM users WHERE id = ?',
+      'SELECT id, email, full_name, role, status FROM users WHERE id = ?',
       [decoded.userId]
     );
 
@@ -28,13 +28,13 @@ const verifyToken = async (req, res, next) => {
       return res.status(401).json({ message: 'Account is suspended' });
     }
 
+    // Attach user info to request (removed email_verified)
     req.user = {
       id: user.id,
       email: user.email,
       full_name: user.full_name,
       role: user.role,
-      status: user.status,
-      email_verified: user.email_verified
+      status: user.status
     };
     
     next();

@@ -57,7 +57,7 @@ app.use('/api/admin', verifyToken, verifyAdminRole, adminRoutes);
 // Referral link redirect endpoint (redirects to frontend with referral code)
 app.get('/ref/:referral_code', (req, res) => {
   const referralCode = req.params.referral_code.toUpperCase();
-  const frontendUrl = process.env.FRONTEND_URL || 'https://cryptominepro.vercel.app';
+  const frontendUrl = process.env.FRONTEND_URL';
   res.redirect(`${frontendUrl}/register?ref=${referralCode}`);
 });
 
