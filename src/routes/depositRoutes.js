@@ -1,14 +1,11 @@
 const express = require('express');
 const router = express.Router();
 const depositController = require('../controllers/depositController');
-const authMiddleware = require('../middleware/authMiddleware');
 
-// User initiates deposit (STK Push)
-router.post('/initiate', authMiddleware.verifyToken, depositController.initiateDeposit);
+// User initiates deposit (STK Push) - requires authentication
+router.post('/initiate', depositController.initiateDeposit);
 
-// M-Pesa callback URL for deposit confirmation
-// Note: This route needs to be publicly accessible without authentication
-// because it's called by the M-Pesa service
-router.post('/mpesa-callback', depositController.mpesaDepositCallback);
+// Remove the callback route from here since it's now in mpesaRoutes
+// The callback needs to be public (no auth required)
 
 module.exports = router;
