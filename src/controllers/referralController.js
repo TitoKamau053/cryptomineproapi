@@ -73,6 +73,7 @@ const getReferralCommissions = async (req, res) => {
 const getReferralInfo = async (req, res) => {
   const userId = req.user.id;
   try {
+    console.log('[getReferralInfo] userId:', userId);
     // Get referral information using the correct referrals table structure
     const [rows] = await pool.query(`
       SELECT r.id as referral_id, 
@@ -93,9 +94,8 @@ const getReferralInfo = async (req, res) => {
       GROUP BY r.id, u.email, u.full_name, u.created_at, r.commission_rate, r.total_commission, r.status, r.created_at
       ORDER BY r.created_at DESC
     `, [userId]);
-    
+    console.log('[getReferralInfo] SQL rows:', rows);
     const referrals = rows;
-    
     // Get referral statistics
     const [statsRows] = await pool.query(`
       SELECT COUNT(DISTINCT r.id) as total_referrals,
@@ -108,7 +108,7 @@ const getReferralInfo = async (req, res) => {
       LEFT JOIN referral_commissions rc ON rc.referral_id = r.id 
       WHERE r.referrer_id = ?
     `, [userId]);
-    
+    console.log('[getReferralInfo] SQL statsRows:', statsRows);
     const statistics = statsRows[0] || {
       total_referrals: 0,
       active_referrals: 0,
@@ -117,12 +117,10 @@ const getReferralInfo = async (req, res) => {
       avg_commission_per_referral: 0,
       lifetime_commissions: 0
     };
-    
     res.json({ 
       referrals: referrals || [],
       statistics
     });
-    
   } catch (error) {
     console.error('Error fetching referral info:', error);
     console.error('Error details:', {
@@ -130,7 +128,6 @@ const getReferralInfo = async (req, res) => {
       code: error.code,
       sqlState: error.sqlState
     });
-    
     // Return empty data instead of error
     res.json({ 
       referrals: [],

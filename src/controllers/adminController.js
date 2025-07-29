@@ -48,31 +48,28 @@ const getAllUsers = async (req, res) => {
     const offset = (page - 1) * limit;
     
     let query = `
-      SELECT id, email, full_name, phone, role, balance, total_earnings, 
-             referral_code, status, last_login, created_at 
-      FROM users 
+      SELECT u.id, u.email, u.full_name, u.phone, u.role, u.balance, u.total_earnings, 
+             u.referral_code, u.status, u.last_login, u.created_at, u.referred_by,
+             referrer.full_name AS referrer_name, referrer.email AS referrer_email
+      FROM users u
+      LEFT JOIN users referrer ON u.referred_by = referrer.id
       WHERE 1=1
     `;
     const params = [];
-    
     if (status) {
-      query += ' AND status = ?';
+      query += ' AND u.status = ?';
       params.push(status);
     }
-    
     if (role) {
-      query += ' AND role = ?';
+      query += ' AND u.role = ?';
       params.push(role);
     }
-    
     if (search) {
-      query += ' AND (email LIKE ? OR full_name LIKE ?)';
+      query += ' AND (u.email LIKE ? OR u.full_name LIKE ?)';
       params.push(`%${search}%`, `%${search}%`);
     }
-    
-    query += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
+    query += ' ORDER BY u.created_at DESC LIMIT ? OFFSET ?';
     params.push(parseInt(limit), parseInt(offset));
-    
     const [users] = await pool.query(query, params);
     
     // Get total count for pagination

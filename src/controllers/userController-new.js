@@ -77,10 +77,17 @@ const register = async (req, res) => {
 
     // If referred, insert into referrals table for network tracking
     if (referred_by) {
-      await pool.query(
-        'INSERT INTO referrals (referrer_id, referred_id, created_at) VALUES (?, ?, NOW())',
+      // Prevent duplicate referral entries
+      const [existingReferral] = await pool.query(
+        'SELECT id FROM referrals WHERE referrer_id = ? AND referred_id = ?',
         [referred_by, userId]
       );
+      if (!existingReferral.length) {
+        await pool.query(
+          'INSERT INTO referrals (referrer_id, referred_id, status, created_at) VALUES (?, ?, ?, NOW())',
+          [referred_by, userId, 'active']
+        );
+      }
     }
 
     res.status(201).json({
