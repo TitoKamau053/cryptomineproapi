@@ -43,12 +43,15 @@ const register = async (req, res) => {
     const saltRounds = 12;
     const password_hash = await bcrypt.hash(password, saltRounds);
 
-    // Handle referral
+    // Handle referral (always uppercase and trim code)
     let referred_by = null;
+    let referrerRow = null;
     if (referral_code) {
-      const [referrer] = await pool.query('SELECT id FROM users WHERE referral_code = ?', [referral_code]);
+      const code = referral_code.trim().toUpperCase();
+      const [referrer] = await pool.query('SELECT id FROM users WHERE UPPER(referral_code) = ?', [code]);
       if (referrer.length > 0) {
         referred_by = referrer[0].id;
+        referrerRow = referrer[0];
       }
     }
 
@@ -71,6 +74,14 @@ const register = async (req, res) => {
     );
 
     const userId = result.insertId;
+
+    // If referred, insert into referrals table for network tracking
+    if (referred_by) {
+      await pool.query(
+        'INSERT INTO referrals (referrer_id, referred_id, created_at) VALUES (?, ?, NOW())',
+        [referred_by, userId]
+      );
+    }
 
     res.status(201).json({
       message: 'Registration successful. You can now login.',
