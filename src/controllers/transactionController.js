@@ -43,12 +43,12 @@ const getRecentActivities = async (req, res) => {
       SELECT 
         u.full_name,
         el.earning_amount as amount,
-        el.earning_date as created_at,
-        'mining_reward' as activity_type,
-        'completed' as status
+      el.earning_date as created_at,
+      'mining_reward' as activity_type,
+      'completed' as status
       FROM engine_logs el
       JOIN users u ON el.user_id = u.id
-      ORDER BY el.earning_date DESC
+      ORDER BY el.earning_datetime DESC
       LIMIT ?
     `, [Math.floor(limit / 4)]);
     
@@ -223,25 +223,25 @@ const getUserTransactions = async (req, res) => {
       transactions.push(...purchases);
     }
     
-    // Get earnings
-    if (!type || type === 'earning') {
-      const [earnings] = await pool.query(`
-        SELECT 
-          'earning' as type,
-          el.id,
-          el.earning_amount as amount,
-          'completed' as status,
-          'mining' as method,
-          CONCAT('ER', el.id) as transaction_id,
-          el.earning_date as created_at,
-          'Mining Reward' as description
-        FROM engine_logs el 
-        WHERE el.user_id = ? AND el.earning_date >= ?
-        ORDER BY el.earning_date DESC
-      `, [userId, startDate]);
-      
-      transactions.push(...earnings);
-    }
+      // Get earnings
+      if (!type || type === 'earning') {
+        const [earnings] = await pool.query(`
+          SELECT 
+            'earning' as type,
+            el.id,
+            el.earning_amount as amount,
+            'completed' as status,
+            'mining' as method,
+            CONCAT('ER', el.id) as transaction_id,
+            el.earning_datetime as created_at,
+            'Mining Reward' as description
+          FROM engine_logs el 
+          WHERE el.user_id = ? AND el.earning_datetime >= ?
+          ORDER BY el.earning_datetime DESC
+        `, [userId, startDate]);
+        
+        transactions.push(...earnings);
+      }
     
     // Sort all transactions by date
     transactions.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
