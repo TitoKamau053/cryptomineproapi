@@ -1,33 +1,28 @@
 const pool = require('../db');
 
-console.log('=== Enhanced Mining Earnings Processor Loaded ===');
+console.log('=== Corrected Mining Earnings Processor with Exact Timing ===');
 
 // Enhanced logging utility
 const log = {
   info: (message, data = {}) => {
-    console.log(`[INFO] ${new Date().toISOString()} - ${message}`, data);
+    console.log(`[EARNINGS-INFO] ${new Date().toISOString()} - ${message}`, data);
   },
   warn: (message, data = {}) => {
-    console.warn(`[WARN] ${new Date().toISOString()} - ${message}`, data);
+    console.warn(`[EARNINGS-WARN] ${new Date().toISOString()} - ${message}`, data);
   },
   error: (message, error = null) => {
-    console.error(`[ERROR] ${new Date().toISOString()} - ${message}`, error);
+    console.error(`[EARNINGS-ERROR] ${new Date().toISOString()} - ${message}`, error);
   },
   debug: (message, data = {}) => {
     if (process.env.DEBUG_EARNINGS === 'true') {
-      console.log(`[DEBUG] ${new Date().toISOString()} - ${message}`, data);
+      console.log(`[EARNINGS-DEBUG] ${new Date().toISOString()} - ${message}`, data);
     }
   }
 };
 
-// Catch all unhandled promise rejections
-process.on('unhandledRejection', (reason, promise) => {
-  log.error('Unhandled Rejection detected:', reason);
-});
-
 /**
- * Enhanced process mining earnings for all active purchases
- * Handles both hourly and daily earning intervals with improved debugging
+ * Process mining earnings for all active purchases with exact timing
+ * This checks for engines that should mature at their exact purchase time + duration
  */
 async function processMiningEarnings(intervalType = null) {
   const connection = await pool.getConnection();
@@ -40,7 +35,7 @@ async function processMiningEarnings(intervalType = null) {
     
     await connection.beginTransaction();
 
-    // Build query based on interval type
+    // Build query based on interval type if specified
     let intervalCondition = '';
     let queryParams = [];
     
@@ -49,7 +44,8 @@ async function processMiningEarnings(intervalType = null) {
       queryParams.push(intervalType);
     }
 
-    // Get all active purchases with their engine details
+    // Get all active purchases that need processing
+    // We'll check each purchase individually for maturity
     const [purchases] = await connection.query(`
       SELECT 
         p.id, 
@@ -62,20 +58,23 @@ async function processMiningEarnings(intervalType = null) {
         p.status,
         p.amount_invested,
         p.total_earned,
+        p.created_at as purchase_time,
         e.earning_interval,
         e.name as engine_name,
         e.daily_earning_rate,
+        e.duration_days,
+        e.duration_hours,
         e.is_active as engine_active
       FROM purchases p
       JOIN mining_engines e ON p.engine_id = e.id
       WHERE p.status = 'active' 
         AND e.is_active = TRUE
-        AND p.end_date >= CURDATE()
+        AND p.end_date > NOW()
         ${intervalCondition}
-      ORDER BY p.id
+      ORDER BY p.created_at ASC
     `, queryParams);
 
-    log.info(`Found ${purchases.length} active purchases to process`, {
+    log.info(`Found ${purchases.length} active purchases to check for maturity`, {
       intervalType: intervalType || 'all',
       totalPurchases: purchases.length
     });
@@ -100,18 +99,28 @@ async function processMiningEarnings(intervalType = null) {
 
     for (const purchase of purchases) {
       try {
-        log.debug(`Processing purchase #${purchase.id}`, {
+        log.debug(`Checking purchase #${purchase.id} for maturity`, {
           userId: purchase.user_id,
           engineName: purchase.engine_name,
           earningInterval: purchase.earning_interval,
-          dailyEarning: purchase.daily_earning
+          purchaseTime: purchase.purchase_time,
+          lastEarningDate: purchase.last_earning_date
         });
 
         const result = await processPurchaseEarnings(connection, purchase, now);
         
-        totalProcessed++;
-        totalPeriodsProcessed += result.periodsProcessed;
-        totalEarningsAdded += result.totalEarning;
+        if (result.periodsProcessed > 0) {
+          totalProcessed++;
+          totalPeriodsProcessed += result.periodsProcessed;
+          totalEarningsAdded += result.totalEarning;
+          
+          log.info(`Purchase #${purchase.id} processed successfully`, {
+            periodsProcessed: result.periodsProcessed,
+            totalEarning: result.totalEarning.toFixed(8),
+            engineName: purchase.engine_name,
+            nextMaturityTime: result.nextMaturityTime
+          });
+        }
         
         processingResults.push({
           purchaseId: purchase.id,
@@ -120,13 +129,8 @@ async function processMiningEarnings(intervalType = null) {
           earningInterval: purchase.earning_interval,
           periodsProcessed: result.periodsProcessed,
           totalEarning: result.totalEarning,
+          nextMaturityTime: result.nextMaturityTime,
           status: result.status || 'success'
-        });
-        
-        log.info(`Purchase #${purchase.id} processed successfully`, {
-          periodsProcessed: result.periodsProcessed,
-          totalEarning: result.totalEarning.toFixed(8),
-          engineName: purchase.engine_name
         });
 
       } catch (error) {
@@ -139,8 +143,6 @@ async function processMiningEarnings(intervalType = null) {
           error: error.message,
           status: 'failed'
         });
-        
-        // Continue with other purchases even if one fails
       }
     }
 
@@ -157,11 +159,6 @@ async function processMiningEarnings(intervalType = null) {
 
     log.info('=== Mining earnings processing completed ===', summary);
     
-    // Log detailed results if debug mode is enabled
-    if (process.env.DEBUG_EARNINGS === 'true') {
-      log.debug('Detailed processing results:', processingResults);
-    }
-    
     return {
       ...summary,
       details: processingResults
@@ -177,7 +174,8 @@ async function processMiningEarnings(intervalType = null) {
 }
 
 /**
- * Enhanced process earnings for a single purchase with improved logic
+ * Process earnings for a single purchase with exact timing logic
+ * This implements the correct logic: purchase time + duration = maturity time
  */
 async function processPurchaseEarnings(connection, purchase, currentTime) {
   const {
@@ -188,27 +186,36 @@ async function processPurchaseEarnings(connection, purchase, currentTime) {
     end_date: endDate,
     last_earning_date: lastEarningDate,
     earning_interval: earningInterval,
-    engine_name: engineName
+    engine_name: engineName,
+    purchase_time: purchaseTime,
+    duration_days: durationDays,
+    duration_hours: durationHours
   } = purchase;
 
   log.debug(`Processing purchase #${purchaseId} (${engineName})`, {
     earningInterval,
     dailyEarning,
-    startDate,
-    endDate,
-    lastEarningDate
+    purchaseTime,
+    lastEarningDate,
+    durationDays,
+    durationHours
   });
 
-  const startDateTime = new Date(startDate);
+  const purchaseDateTime = new Date(purchaseTime);
   const endDateTime = new Date(endDate);
   
   // Validate purchase period
-  if (currentTime < startDateTime) {
+  if (currentTime < purchaseDateTime) {
     log.debug(`Purchase #${purchaseId} has not started yet`);
-    return { periodsProcessed: 0, totalEarning: 0, status: 'pending_start' };
+    return { 
+      periodsProcessed: 0, 
+      totalEarning: 0, 
+      status: 'pending_start',
+      nextMaturityTime: null 
+    };
   }
 
-  if (currentTime > endDateTime) {
+  if (currentTime >= endDateTime) {
     // Mark as completed if not already
     if (purchase.status === 'active') {
       await connection.query(
@@ -217,42 +224,35 @@ async function processPurchaseEarnings(connection, purchase, currentTime) {
       );
       log.info(`Purchase #${purchaseId} marked as completed (end date reached)`);
     }
-    return { periodsProcessed: 0, totalEarning: 0, status: 'completed' };
+    return { 
+      periodsProcessed: 0, 
+      totalEarning: 0, 
+      status: 'completed',
+      nextMaturityTime: null 
+    };
   }
 
-  // Determine the starting point for earning calculations
-  let lastProcessedTime;
-  if (lastEarningDate) {
-    lastProcessedTime = new Date(lastEarningDate);
-  } else {
-    // First time processing - start from purchase start date
-    lastProcessedTime = new Date(startDateTime);
-    if (earningInterval === 'hourly') {
-      // For hourly, we want to start from the first complete hour
-      lastProcessedTime.setMinutes(0, 0, 0);
-    } else {
-      // For daily, start from the beginning of the start date
-      lastProcessedTime.setHours(0, 0, 0, 0);
-    }
-  }
-
+  // Calculate maturity times based on exact purchase time + duration
   let periodsProcessed = 0;
   let totalEarning = 0;
+  let nextMaturityTime = null;
   const earningsToProcess = [];
 
   if (earningInterval === 'hourly') {
-    const result = await processHourlyEarnings(connection, purchase, lastProcessedTime, currentTime, endDateTime);
+    const result = await processHourlyEarningsExact(connection, purchase, purchaseDateTime, currentTime, endDateTime);
     periodsProcessed = result.periodsProcessed;
     totalEarning = result.totalEarning;
+    nextMaturityTime = result.nextMaturityTime;
     earningsToProcess.push(...result.earnings);
   } else {
-    const result = await processDailyEarnings(connection, purchase, lastProcessedTime, currentTime, endDateTime);
+    const result = await processDailyEarningsExact(connection, purchase, purchaseDateTime, currentTime, endDateTime);
     periodsProcessed = result.periodsProcessed;
     totalEarning = result.totalEarning;
+    nextMaturityTime = result.nextMaturityTime;
     earningsToProcess.push(...result.earnings);
   }
 
-  // Log earnings in batch for better performance
+  // Log earnings
   if (earningsToProcess.length > 0) {
     for (const earning of earningsToProcess) {
       try {
@@ -273,114 +273,151 @@ async function processPurchaseEarnings(connection, purchase, currentTime) {
   log.debug(`Purchase #${purchaseId} processing completed`, {
     periodsProcessed,
     totalEarning: totalEarning.toFixed(8),
-    earningInterval
+    earningInterval,
+    nextMaturityTime: nextMaturityTime ? nextMaturityTime.toISOString() : null
   });
 
   return { 
     periodsProcessed, 
     totalEarning,
+    nextMaturityTime,
     status: 'success'
   };
 }
 
 /**
- * Process hourly earnings with precision
+ * Process hourly earnings with exact timing
+ * Example: Purchase at 4:00 PM → mature at 5:00 PM, 6:00 PM, 7:00 PM, etc.
  */
-async function processHourlyEarnings(connection, purchase, lastProcessedTime, currentTime, endDateTime) {
-  const { id: purchaseId, daily_earning: dailyEarning } = purchase;
+async function processHourlyEarningsExact(connection, purchase, purchaseDateTime, currentTime, endDateTime) {
+  const { id: purchaseId, daily_earning: dailyEarning, duration_hours: durationHours } = purchase;
   const hourlyEarning = parseFloat((dailyEarning / 24).toFixed(8));
   
   let periodsProcessed = 0;
   let totalEarning = 0;
+  let nextMaturityTime = null;
   const earnings = [];
   
-  // Start from the next hour after last processed time
-  let nextEarningTime = new Date(lastProcessedTime);
-  nextEarningTime.setHours(nextEarningTime.getHours() + 1, 0, 0, 0);
+  // Calculate total periods this engine should run
+  const totalPeriods = durationHours || 24; // Default to 24 hours if not specified
   
-  log.debug(`Processing hourly earnings for purchase ${purchaseId}`, {
-    hourlyEarning,
-    startFrom: nextEarningTime.toISOString(),
-    endAt: Math.min(currentTime, endDateTime).toISOString()
-  });
-
-  while (nextEarningTime <= currentTime && nextEarningTime <= endDateTime) {
-    // Check if this earning period was already processed
-    const [existingLog] = await connection.query(
-      'SELECT id FROM engine_logs WHERE purchase_id = ? AND earning_datetime = ?',
-      [purchaseId, nextEarningTime instanceof Date ? nextEarningTime : new Date(nextEarningTime)]
-    );
-
-    if (existingLog.length === 0) {
-      earnings.push({
-        amount: hourlyEarning,
-        datetime: new Date(nextEarningTime)
-      });
-      
-      periodsProcessed++;
-      totalEarning += hourlyEarning;
-      
-      log.debug(`Hourly earning scheduled: ${nextEarningTime.toISOString()} = ${hourlyEarning.toFixed(8)}`);
-    } else {
-      log.debug(`Hourly earning already exists: ${nextEarningTime.toISOString()}`);
+  // Calculate maturity times: purchase_time + 1 hour, + 2 hours, + 3 hours, etc.
+  for (let period = 1; period <= totalPeriods; period++) {
+    const maturityTime = new Date(purchaseDateTime);
+    maturityTime.setHours(maturityTime.getHours() + period);
+    
+    // If this maturity time is in the future, this is our next maturity
+    if (maturityTime > currentTime) {
+      nextMaturityTime = maturityTime;
+      break;
     }
     
-    nextEarningTime.setHours(nextEarningTime.getHours() + 1);
+    // If this maturity time has passed and is within the engine's lifespan
+    if (maturityTime <= currentTime && maturityTime <= endDateTime) {
+      // Check if this earning was already processed
+      const [existingLog] = await connection.query(
+        'SELECT id FROM engine_logs WHERE purchase_id = ? AND earning_datetime = ?',
+        [purchaseId, maturityTime]
+      );
+
+      if (existingLog.length === 0) {
+        earnings.push({
+          amount: hourlyEarning,
+          datetime: new Date(maturityTime)
+        });
+        
+        periodsProcessed++;
+        totalEarning += hourlyEarning;
+        
+        log.debug(`Hourly earning scheduled: ${maturityTime.toISOString()} = ${hourlyEarning.toFixed(8)}`);
+      } else {
+        log.debug(`Hourly earning already exists: ${maturityTime.toISOString()}`);
+      }
+    }
+  }
+  
+  // If we processed all periods, there's no next maturity
+  if (periodsProcessed >= totalPeriods) {
+    nextMaturityTime = null;
   }
 
-  return { periodsProcessed, totalEarning, earnings };
+  log.debug(`Hourly earnings processing completed for purchase ${purchaseId}`, {
+    totalPeriods,
+    periodsProcessed,
+    totalEarning: totalEarning.toFixed(8),
+    nextMaturityTime: nextMaturityTime ? nextMaturityTime.toISOString() : 'completed'
+  });
+
+  return { periodsProcessed, totalEarning, nextMaturityTime, earnings };
 }
 
 /**
- * Process daily earnings with precision
+ * Process daily earnings with exact timing
+ * Example: Purchase at 4:00 PM today → mature at 4:00 PM tomorrow, 4:00 PM day after, etc.
  */
-async function processDailyEarnings(connection, purchase, lastProcessedTime, currentTime, endDateTime) {
-  const { id: purchaseId, daily_earning: dailyEarning } = purchase;
+async function processDailyEarningsExact(connection, purchase, purchaseDateTime, currentTime, endDateTime) {
+  const { id: purchaseId, daily_earning: dailyEarning, duration_days: durationDays } = purchase;
   
   let periodsProcessed = 0;
   let totalEarning = 0;
+  let nextMaturityTime = null;
   const earnings = [];
   
-  // Start from the next day after last processed time
-  let nextEarningTime = new Date(lastProcessedTime);
-  nextEarningTime.setDate(nextEarningTime.getDate() + 1);
-  nextEarningTime.setHours(0, 0, 0, 0); // Set to start of day
+  // Calculate total periods this engine should run
+  const totalPeriods = durationDays || 365; // Default to 365 days if not specified
   
-  log.debug(`Processing daily earnings for purchase ${purchaseId}`, {
-    dailyEarning,
-    startFrom: nextEarningTime.toISOString(),
-    endAt: Math.min(currentTime, endDateTime).toISOString()
-  });
-
-  while (nextEarningTime <= currentTime && nextEarningTime <= endDateTime) {
-    // Check if this earning period was already processed (check by date only)
-    const [existingLog] = await connection.query(
-      'SELECT id FROM engine_logs WHERE purchase_id = ? AND DATE(earning_datetime) = DATE(?)',
-      [purchaseId, nextEarningTime instanceof Date ? nextEarningTime : new Date(nextEarningTime)]
-    );
-
-    if (existingLog.length === 0) {
-      earnings.push({
-        amount: parseFloat(dailyEarning),
-        datetime: new Date(nextEarningTime)
-      });
-      
-      periodsProcessed++;
-      totalEarning += parseFloat(dailyEarning);
-      
-      log.debug(`Daily earning scheduled: ${nextEarningTime.toISOString().split('T')[0]} = ${dailyEarning}`);
-    } else {
-      log.debug(`Daily earning already exists: ${nextEarningTime.toISOString().split('T')[0]}`);
+  // Calculate maturity times: purchase_time + 1 day, + 2 days, + 3 days, etc.
+  for (let period = 1; period <= totalPeriods; period++) {
+    const maturityTime = new Date(purchaseDateTime);
+    maturityTime.setDate(maturityTime.getDate() + period);
+    
+    // If this maturity time is in the future, this is our next maturity
+    if (maturityTime > currentTime) {
+      nextMaturityTime = maturityTime;
+      break;
     }
     
-    nextEarningTime.setDate(nextEarningTime.getDate() + 1);
+    // If this maturity time has passed and is within the engine's lifespan
+    if (maturityTime <= currentTime && maturityTime <= endDateTime) {
+      // Check if this earning was already processed (check by exact datetime)
+      const [existingLog] = await connection.query(
+        'SELECT id FROM engine_logs WHERE purchase_id = ? AND earning_datetime = ?',
+        [purchaseId, maturityTime]
+      );
+
+      if (existingLog.length === 0) {
+        earnings.push({
+          amount: parseFloat(dailyEarning),
+          datetime: new Date(maturityTime)
+        });
+        
+        periodsProcessed++;
+        totalEarning += parseFloat(dailyEarning);
+        
+        log.debug(`Daily earning scheduled: ${maturityTime.toISOString()} = ${dailyEarning}`);
+      } else {
+        log.debug(`Daily earning already exists: ${maturityTime.toISOString()}`);
+      }
+    }
+  }
+  
+  // If we processed all periods, there's no next maturity
+  if (periodsProcessed >= totalPeriods) {
+    nextMaturityTime = null;
   }
 
-  return { periodsProcessed, totalEarning, earnings };
+  log.debug(`Daily earnings processing completed for purchase ${purchaseId}`, {
+    totalPeriods,
+    periodsProcessed,
+    totalEarning: totalEarning.toFixed(2),
+    nextMaturityTime: nextMaturityTime ? nextMaturityTime.toISOString() : 'completed'
+  });
+
+  return { periodsProcessed, totalEarning, nextMaturityTime, earnings };
 }
 
 /**
- * Enhanced manual earning trigger with better error handling
+ * Manual earning trigger with enhanced validation
  */
 async function triggerManualEarning(purchaseId, adminId = null) {
   const connection = await pool.getConnection();
@@ -394,7 +431,8 @@ async function triggerManualEarning(purchaseId, adminId = null) {
     const [purchases] = await connection.query(`
       SELECT 
         p.id, p.user_id, p.daily_earning, p.start_date, p.end_date, 
-        p.last_earning_date, p.status, e.earning_interval, e.name as engine_name,
+        p.last_earning_date, p.status, p.created_at as purchase_time,
+        e.earning_interval, e.name as engine_name, e.duration_days, e.duration_hours,
         e.is_active as engine_active
       FROM purchases p
       JOIN mining_engines e ON p.engine_id = e.id
@@ -429,7 +467,8 @@ async function triggerManualEarning(purchaseId, adminId = null) {
           periods_processed: result.periodsProcessed,
           total_earning: result.totalEarning,
           engine_name: purchase.engine_name,
-          earning_interval: purchase.earning_interval
+          earning_interval: purchase.earning_interval,
+          next_maturity_time: result.nextMaturityTime
         })
       ]);
     }
@@ -439,6 +478,7 @@ async function triggerManualEarning(purchaseId, adminId = null) {
     log.info(`Manual earning trigger completed for purchase ${purchaseId}`, {
       periodsProcessed: result.periodsProcessed,
       totalEarning: result.totalEarning,
+      nextMaturityTime: result.nextMaturityTime,
       adminId
     });
     
@@ -454,7 +494,7 @@ async function triggerManualEarning(purchaseId, adminId = null) {
 }
 
 /**
- * Enhanced user earnings summary with more details
+ * Get user earnings summary with next maturity times
  */
 async function getUserEarningsSummary(userId) {
   try {
@@ -462,57 +502,65 @@ async function getUserEarningsSummary(userId) {
     
     const [summary] = await pool.query(`
       SELECT 
-        COUNT(DISTINCT el.purchase_id) as active_purchases,
+        COUNT(DISTINCT p.id) as active_purchases,
         COALESCE(SUM(el.earning_amount), 0) as total_logged_earnings,
         COALESCE(MAX(el.earning_datetime), NULL) as last_earning_time,
         COUNT(el.id) as total_earning_logs,
         COALESCE(SUM(CASE WHEN DATE(el.earning_datetime) = CURDATE() THEN el.earning_amount ELSE 0 END), 0) as todays_earnings,
-        COALESCE(SUM(CASE WHEN el.earning_datetime >= DATE_SUB(NOW(), INTERVAL 7 DAY) THEN el.earning_amount ELSE 0 END), 0) as last_7_days_earnings
-      FROM engine_logs el
-      JOIN purchases p ON el.purchase_id = p.id
-      WHERE el.user_id = ? AND p.status = 'active'
-    `, [userId]);
-    
-    const [recentEarnings] = await pool.query(`
-      SELECT 
-        el.earning_amount,
-        el.earning_datetime,
-        me.name as engine_name,
-        me.earning_interval,
-        p.amount_invested,
-        p.id as purchase_id
-      FROM engine_logs el
-      JOIN purchases p ON el.purchase_id = p.id
-      JOIN mining_engines me ON p.engine_id = me.id
-      WHERE el.user_id = ?
-      ORDER BY el.earning_datetime DESC
-      LIMIT 10
-    `, [userId]);
-    
-    // Get active purchases summary
-    const [activePurchases] = await pool.query(`
-      SELECT 
-        p.id,
-        p.amount_invested,
-        p.daily_earning,
-        p.start_date,
-        p.end_date,
-        p.total_earned,
-        me.name as engine_name,
-        me.earning_interval,
-        DATEDIFF(p.end_date, CURDATE()) as days_remaining
+        COALESCE(SUM(CASE WHEN el.earning_datetime >= DATE_SUB(NOW(), INTERVAL 7 DAY) THEN el.earning_amount ELSE 0 END), 0) as last_7_days_earnings,
+        COALESCE(SUM(CASE WHEN el.earning_datetime >= DATE_SUB(NOW(), INTERVAL 1 HOUR) THEN el.earning_amount ELSE 0 END), 0) as last_hour_earnings
       FROM purchases p
-      JOIN mining_engines me ON p.engine_id = me.id
+      LEFT JOIN engine_logs el ON p.id = el.purchase_id
       WHERE p.user_id = ? AND p.status = 'active'
-      ORDER BY p.created_at DESC
+    `, [userId]);
+    
+    // Get upcoming maturity times
+    const [upcomingMaturities] = await pool.query(`
+      SELECT 
+        p.id as purchase_id,
+        e.name as engine_name,
+        e.earning_interval,
+        e.duration_days,
+        e.duration_hours,
+        p.created_at as purchase_time,
+        CASE 
+          WHEN e.earning_interval = 'hourly' THEN
+            DATE_ADD(p.created_at, INTERVAL 
+              (FLOOR(TIMESTAMPDIFF(HOUR, p.created_at, NOW())) + 1) HOUR)
+          ELSE
+            DATE_ADD(p.created_at, INTERVAL 
+              (FLOOR(TIMESTAMPDIFF(DAY, p.created_at, NOW())) + 1) DAY)
+        END as next_maturity_time,
+        CASE 
+          WHEN e.earning_interval = 'hourly' THEN ROUND(p.daily_earning / 24, 8)
+          ELSE p.daily_earning
+        END as next_earning_amount
+      FROM purchases p
+      JOIN mining_engines e ON p.engine_id = e.id
+      WHERE p.user_id = ? 
+        AND p.status = 'active' 
+        AND p.end_date > NOW()
+        AND (
+          (e.earning_interval = 'hourly' AND 
+           FLOOR(TIMESTAMPDIFF(HOUR, p.created_at, NOW())) < COALESCE(e.duration_hours, 24))
+          OR
+          (e.earning_interval = 'daily' AND 
+           FLOOR(TIMESTAMPDIFF(DAY, p.created_at, NOW())) < COALESCE(e.duration_days, 365))
+        )
+      ORDER BY next_maturity_time ASC
+      LIMIT 5
     `, [userId]);
     
     return {
-      summary: {
-        ...summary[0],
-        active_purchases_detail: activePurchases
-      },
-      recent_earnings: recentEarnings
+      summary: summary[0],
+      upcoming_maturities: upcomingMaturities.map(maturity => ({
+        ...maturity,
+        next_maturity_time: maturity.next_maturity_time ? maturity.next_maturity_time.toISOString() : null,
+        minutes_until_maturity: maturity.next_maturity_time ? 
+          Math.max(0, Math.floor((new Date(maturity.next_maturity_time) - new Date()) / (1000 * 60))) : null,
+        formatted_amount: `KES ${parseFloat(maturity.next_earning_amount).toFixed(2)}`,
+        purchase_time: maturity.purchase_time.toISOString()
+      }))
     };
     
   } catch (error) {
@@ -522,63 +570,64 @@ async function getUserEarningsSummary(userId) {
 }
 
 /**
- * NEW: Get detailed earnings analytics for admin
+ * Get detailed maturity schedule for a purchase
  */
-async function getEarningsAnalytics(timeframe = '7d') {
+async function getPurchaseMaturitySchedule(purchaseId) {
   try {
-    let dateCondition = 'WHERE el.earning_datetime >= DATE_SUB(NOW(), INTERVAL 7 DAY)';
+    const [purchases] = await pool.query(`
+      SELECT 
+        p.*, e.name as engine_name, e.earning_interval, 
+        e.duration_days, e.duration_hours
+      FROM purchases p
+      JOIN mining_engines e ON p.engine_id = e.id
+      WHERE p.id = ?
+    `, [purchaseId]);
     
-    switch (timeframe) {
-      case '24h':
-        dateCondition = 'WHERE el.earning_datetime >= DATE_SUB(NOW(), INTERVAL 1 DAY)';
-        break;
-      case '30d':
-        dateCondition = 'WHERE el.earning_datetime >= DATE_SUB(NOW(), INTERVAL 30 DAY)';
-        break;
-      case '90d':
-        dateCondition = 'WHERE el.earning_datetime >= DATE_SUB(NOW(), INTERVAL 90 DAY)';
-        break;
+    if (purchases.length === 0) {
+      throw new Error('Purchase not found');
     }
     
-    const [intervalStats] = await pool.query(`
-      SELECT 
-        me.earning_interval,
-        COUNT(el.id) as total_logs,
-        COUNT(DISTINCT el.purchase_id) as active_purchases,
-        COUNT(DISTINCT el.user_id) as active_users,
-        SUM(el.earning_amount) as total_earnings,
-        AVG(el.earning_amount) as avg_earning,
-        MIN(el.earning_datetime) as earliest_earning,
-        MAX(el.earning_datetime) as latest_earning
-      FROM engine_logs el
-      JOIN purchases p ON el.purchase_id = p.id
-      JOIN mining_engines me ON p.engine_id = me.id
-      ${dateCondition}
-      GROUP BY me.earning_interval
-    `);
+    const purchase = purchases[0];
+    const purchaseTime = new Date(purchase.created_at);
+    const schedule = [];
     
-    const [hourlyDistribution] = await pool.query(`
-      SELECT 
-        HOUR(el.earning_datetime) as hour_of_day,
-        COUNT(el.id) as earnings_count,
-        SUM(el.earning_amount) as total_amount
-      FROM engine_logs el
-      JOIN purchases p ON el.purchase_id = p.id
-      JOIN mining_engines me ON p.engine_id = me.id
-      ${dateCondition}
-      GROUP BY HOUR(el.earning_datetime)
-      ORDER BY hour_of_day
-    `);
+    if (purchase.earning_interval === 'hourly') {
+      const totalHours = purchase.duration_hours || 24;
+      for (let hour = 1; hour <= totalHours; hour++) {
+        const maturityTime = new Date(purchaseTime);
+        maturityTime.setHours(maturityTime.getHours() + hour);
+        
+        schedule.push({
+          period: hour,
+          maturity_time: maturityTime.toISOString(),
+          earning_amount: parseFloat((purchase.daily_earning / 24).toFixed(8)),
+          status: maturityTime <= new Date() ? 'mature' : 'pending'
+        });
+      }
+    } else {
+      const totalDays = purchase.duration_days || 365;
+      for (let day = 1; day <= totalDays; day++) {
+        const maturityTime = new Date(purchaseTime);
+        maturityTime.setDate(maturityTime.getDate() + day);
+        
+        schedule.push({
+          period: day,
+          maturity_time: maturityTime.toISOString(),
+          earning_amount: parseFloat(purchase.daily_earning),
+          status: maturityTime <= new Date() ? 'mature' : 'pending'
+        });
+      }
+    }
     
     return {
-      timeframe,
-      interval_statistics: intervalStats,
-      hourly_distribution: hourlyDistribution,
-      generated_at: new Date().toISOString()
+      purchase_info: purchase,
+      maturity_schedule: schedule.slice(0, 50), // Limit to first 50 for performance
+      total_periods: schedule.length,
+      mature_periods: schedule.filter(s => s.status === 'mature').length
     };
     
   } catch (error) {
-    log.error('Error fetching earnings analytics:', error);
+    log.error('Error fetching purchase maturity schedule:', error);
     throw error;
   }
 }
@@ -587,9 +636,8 @@ module.exports = {
   processMiningEarnings,
   triggerManualEarning,
   getUserEarningsSummary,
-  getEarningsAnalytics,
-  // Export utility functions for testing
-  processHourlyEarnings,
-  processDailyEarnings,
+  getPurchaseMaturitySchedule,
+  processHourlyEarningsExact,
+  processDailyEarningsExact,
   log
 };
