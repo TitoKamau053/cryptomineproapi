@@ -44,7 +44,7 @@ app.use('/api/mining-engines', miningEngineRoutes);
 app.use('/api/purchases', purchaseRoutes);
 app.use('/api/earnings', earningRoutes);
 app.use('/api/mpesa', mpesaRoutes);
-app.use('/api/referrals', referralRoutes);  
+app.use('/api/referrals', referralRoutes);
 
 // Protected routes
 app.use('/api/deposits', verifyToken, depositRoutes);
@@ -61,13 +61,41 @@ app.get('/ref/:referral_code', (req, res) => {
   res.redirect(`${frontendUrl}/register?ref=${referralCode}`);
 });
 
+// Manual earnings processing endpoint for admin testing
+app.post('/api/admin/trigger-earnings', verifyToken, verifyAdminRole, async (req, res) => {
+  try {
+    const { triggerManualProcessing } = require('./utils/cronJobs');
+    const result = await triggerManualProcessing();
+    res.json({
+      success: true,
+      message: 'Earnings processing triggered manually',
+      result
+    });
+  } catch (error) {
+    console.error('Manual trigger error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to trigger earnings processing',
+      error: error.message
+    });
+  }
+});
+
 const PORT = process.env.PORT || 3000;
 
 // Only start server if not in test environment
 if (process.env.NODE_ENV !== 'test') {
   app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
+    
+    // Start the earnings processing cron jobs
+    const { startCronJobs } = require('./utils/cronJobs');
+    startCronJobs();
+    console.log('Cron jobs started successfully');
   });
+} else {
+  // For test environment, still export the app but don't start cron jobs
+  console.log('Test environment detected - skipping server startup and cron jobs');
 }
 
 module.exports = app;

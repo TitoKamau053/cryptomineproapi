@@ -105,6 +105,7 @@ logs
 *.db
 *.sql
 *.md
+earningsTest.js
 
 # IDE and Editor files
 .vscode/

@@ -1,0 +1,1055 @@
+-- MySQL dump 10.13  Distrib 8.0.42, for Win64 (x86_64)
+--
+-- Host: localhost    Database: cryptominepro
+-- ------------------------------------------------------
+-- Server version	8.0.42
+
+/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
+/*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
+/*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
+/*!50503 SET NAMES utf8mb4 */;
+/*!40103 SET @OLD_TIME_ZONE=@@TIME_ZONE */;
+/*!40103 SET TIME_ZONE='+00:00' */;
+/*!40014 SET @OLD_UNIQUE_CHECKS=@@UNIQUE_CHECKS, UNIQUE_CHECKS=0 */;
+/*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;
+/*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
+/*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
+
+--
+-- Table structure for table `admin_logs`
+--
+
+DROP TABLE IF EXISTS `admin_logs`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `admin_logs` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `admin_id` bigint unsigned NOT NULL,
+  `action` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `target_type` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `target_id` bigint unsigned DEFAULT NULL,
+  `details` json DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_admin_logs_admin_id` (`admin_id`),
+  KEY `idx_admin_logs_action` (`action`),
+  KEY `idx_admin_logs_created_at` (`created_at`)
+) ENGINE=InnoDB AUTO_INCREMENT=163 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `deposits`
+--
+
+DROP TABLE IF EXISTS `deposits`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `deposits` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `user_id` bigint unsigned NOT NULL,
+  `amount` decimal(15,2) NOT NULL,
+  `method` enum('mpesa','bank','crypto','admin') COLLATE utf8mb4_unicode_ci DEFAULT 'mpesa',
+  `transaction_id` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `mpesa_receipt` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `status` enum('pending','completed','failed','cancelled') COLLATE utf8mb4_unicode_ci DEFAULT 'pending',
+  `admin_notes` text COLLATE utf8mb4_unicode_ci,
+  `processed_by` bigint unsigned DEFAULT NULL,
+  `processed_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_user_id` (`user_id`),
+  KEY `idx_status` (`status`),
+  KEY `idx_method` (`method`),
+  KEY `idx_transaction_id` (`transaction_id`),
+  KEY `idx_created_at` (`created_at`),
+  KEY `processed_by` (`processed_by`),
+  CONSTRAINT `deposits_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `deposits_ibfk_2` FOREIGN KEY (`processed_by`) REFERENCES `users` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB AUTO_INCREMENT=40 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `email_verification_tokens`
+--
+
+DROP TABLE IF EXISTS `email_verification_tokens`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `email_verification_tokens` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `user_id` bigint unsigned NOT NULL,
+  `token` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `token_type` enum('email_verification','password_reset') COLLATE utf8mb4_unicode_ci DEFAULT 'email_verification',
+  `expires_at` timestamp NOT NULL,
+  `used` tinyint(1) DEFAULT '0',
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `used_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `user_id` (`user_id`),
+  KEY `idx_token` (`token`),
+  KEY `idx_expires_at` (`expires_at`),
+  CONSTRAINT `email_verification_tokens_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=27 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `engine_logs`
+--
+
+DROP TABLE IF EXISTS `engine_logs`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `engine_logs` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `purchase_id` bigint unsigned NOT NULL,
+  `user_id` bigint unsigned NOT NULL,
+  `earning_amount` decimal(15,2) NOT NULL,
+  `earning_datetime` datetime NOT NULL,
+  `notes` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `unique_purchase_datetime` (`purchase_id`,`earning_datetime`),
+  KEY `idx_purchase_id` (`purchase_id`),
+  KEY `idx_user_id` (`user_id`),
+  KEY `idx_earning_date` (`earning_datetime`),
+  CONSTRAINT `engine_logs_ibfk_1` FOREIGN KEY (`purchase_id`) REFERENCES `purchases` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `engine_logs_ibfk_2` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=68 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `mining_engines`
+--
+
+DROP TABLE IF EXISTS `mining_engines`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `mining_engines` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `name` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `description` text COLLATE utf8mb4_unicode_ci,
+  `price` decimal(15,2) NOT NULL,
+  `daily_earning_rate` decimal(5,4) NOT NULL,
+  `duration_days` int NOT NULL DEFAULT '365',
+  `min_investment` decimal(15,2) DEFAULT '0.00',
+  `max_investment` decimal(15,2) DEFAULT '999999999.99',
+  `is_active` tinyint(1) DEFAULT '1',
+  `image_url` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `earning_interval` enum('hourly','daily') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'daily',
+  PRIMARY KEY (`id`),
+  KEY `idx_active` (`is_active`),
+  KEY `idx_price` (`price`)
+) ENGINE=InnoDB AUTO_INCREMENT=8 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `mpesa_callbacks`
+--
+
+DROP TABLE IF EXISTS `mpesa_callbacks`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `mpesa_callbacks` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `callback_data` text COLLATE utf8mb4_unicode_ci NOT NULL,
+  `callback_type` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT 'generic',
+  `processed_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_callback_type` (`callback_type`),
+  KEY `idx_processed_at` (`processed_at`)
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `mpesa_payouts`
+--
+
+DROP TABLE IF EXISTS `mpesa_payouts`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `mpesa_payouts` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `phone` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `amount` decimal(10,2) DEFAULT NULL,
+  `transactionId` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `conversation_id` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `originator_conversation_id` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `status` enum('PENDING','SUCCESS','FAILED') COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `mpesa_transactions`
+--
+
+DROP TABLE IF EXISTS `mpesa_transactions`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `mpesa_transactions` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `phone` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `amount` decimal(10,2) DEFAULT NULL,
+  `receipt` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `transaction_date` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `checkoutRequestId` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `status` enum('PENDING','SUCCESS','FAILED') COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `result_desc` text COLLATE utf8mb4_unicode_ci,
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `purchases`
+--
+
+DROP TABLE IF EXISTS `purchases`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `purchases` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `user_id` bigint unsigned NOT NULL,
+  `engine_id` bigint unsigned NOT NULL,
+  `amount_invested` decimal(15,2) NOT NULL,
+  `daily_earning` decimal(15,2) NOT NULL,
+  `total_earned` decimal(15,2) DEFAULT '0.00',
+  `start_date` date NOT NULL,
+  `end_date` date NOT NULL,
+  `status` enum('active','completed','cancelled','paused') COLLATE utf8mb4_unicode_ci DEFAULT 'active',
+  `last_earning_date` date DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_user_id` (`user_id`),
+  KEY `idx_engine_id` (`engine_id`),
+  KEY `idx_status` (`status`),
+  KEY `idx_end_date` (`end_date`),
+  KEY `idx_last_earning_date` (`last_earning_date`),
+  CONSTRAINT `purchases_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `purchases_ibfk_2` FOREIGN KEY (`engine_id`) REFERENCES `mining_engines` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=12 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `referral_commissions`
+--
+
+DROP TABLE IF EXISTS `referral_commissions`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `referral_commissions` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `referral_id` bigint unsigned NOT NULL,
+  `purchase_id` bigint unsigned NOT NULL,
+  `commission_amount` decimal(15,2) NOT NULL,
+  `commission_date` date NOT NULL,
+  `status` enum('pending','paid') COLLATE utf8mb4_unicode_ci DEFAULT 'paid',
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_referral_id` (`referral_id`),
+  KEY `idx_purchase_id` (`purchase_id`),
+  KEY `idx_commission_date` (`commission_date`),
+  KEY `idx_status` (`status`),
+  CONSTRAINT `referral_commissions_ibfk_1` FOREIGN KEY (`referral_id`) REFERENCES `referrals` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `referral_commissions_ibfk_2` FOREIGN KEY (`purchase_id`) REFERENCES `purchases` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `referrals`
+--
+
+DROP TABLE IF EXISTS `referrals`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `referrals` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `referrer_id` bigint unsigned NOT NULL,
+  `referred_id` bigint unsigned NOT NULL,
+  `commission_rate` decimal(5,4) DEFAULT '0.0500',
+  `total_commission` decimal(15,2) DEFAULT '0.00',
+  `status` enum('active','inactive') COLLATE utf8mb4_unicode_ci DEFAULT 'active',
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `unique_referral` (`referrer_id`,`referred_id`),
+  KEY `idx_referrer_id` (`referrer_id`),
+  KEY `idx_referred_id` (`referred_id`),
+  KEY `idx_status` (`status`),
+  CONSTRAINT `referrals_ibfk_1` FOREIGN KEY (`referrer_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `referrals_ibfk_2` FOREIGN KEY (`referred_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `system_settings`
+--
+
+DROP TABLE IF EXISTS `system_settings`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `system_settings` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `setting_key` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `setting_value` text COLLATE utf8mb4_unicode_ci NOT NULL,
+  `data_type` enum('string','number','boolean','json') COLLATE utf8mb4_unicode_ci DEFAULT 'string',
+  `description` text COLLATE utf8mb4_unicode_ci,
+  `category` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT 'general',
+  `is_editable` tinyint(1) DEFAULT '1',
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `setting_key` (`setting_key`),
+  KEY `idx_setting_key` (`setting_key`),
+  KEY `idx_category` (`category`)
+) ENGINE=InnoDB AUTO_INCREMENT=32 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `users`
+--
+
+DROP TABLE IF EXISTS `users`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `users` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `firebase_uid` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `email` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `password_hash` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `full_name` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `phone` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `role` enum('user','admin') COLLATE utf8mb4_unicode_ci DEFAULT 'user',
+  `balance` decimal(15,2) DEFAULT '0.00',
+  `total_earnings` decimal(15,2) DEFAULT '0.00',
+  `referral_code` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `referred_by` bigint unsigned DEFAULT NULL,
+  `email_verified` tinyint(1) DEFAULT '0',
+  `status` enum('active','suspended','pending','deactivated') COLLATE utf8mb4_unicode_ci DEFAULT 'active',
+  `last_login` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `email_verified_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `email` (`email`),
+  UNIQUE KEY `referral_code` (`referral_code`),
+  UNIQUE KEY `firebase_uid` (`firebase_uid`),
+  KEY `idx_email` (`email`),
+  KEY `idx_referral_code` (`referral_code`),
+  KEY `idx_referred_by` (`referred_by`),
+  KEY `idx_status` (`status`),
+  KEY `idx_users_firebase_uid` (`firebase_uid`),
+  KEY `idx_users_email` (`email`),
+  CONSTRAINT `users_ibfk_1` FOREIGN KEY (`referred_by`) REFERENCES `users` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB AUTO_INCREMENT=30 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = cp850 */ ;
+/*!50003 SET character_set_results = cp850 */ ;
+/*!50003 SET collation_connection  = cp850_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+/*!50003 CREATE*/ /*!50017 DEFINER=`root`@`localhost`*/ /*!50003 TRIGGER `tr_users_before_insert` BEFORE INSERT ON `users` FOR EACH ROW BEGIN
+    IF NEW.referral_code IS NULL THEN
+        SET NEW.referral_code = CONCAT('REF', LPAD(FLOOR(RAND() * 999999), 6, '0'));
+        
+        
+        WHILE (SELECT COUNT(*) FROM users WHERE referral_code = NEW.referral_code) > 0 DO
+            SET NEW.referral_code = CONCAT('REF', LPAD(FLOOR(RAND() * 999999), 6, '0'));
+        END WHILE;
+    END IF;
+END */;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+
+--
+-- Table structure for table `withdrawals`
+--
+
+DROP TABLE IF EXISTS `withdrawals`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `withdrawals` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `user_id` bigint unsigned NOT NULL,
+  `amount` decimal(15,2) NOT NULL,
+  `method` enum('mpesa','bank','crypto') COLLATE utf8mb4_unicode_ci DEFAULT 'mpesa',
+  `account_details` json NOT NULL,
+  `status` enum('pending','approved','completed','rejected') COLLATE utf8mb4_unicode_ci DEFAULT 'pending',
+  `admin_notes` text COLLATE utf8mb4_unicode_ci,
+  `transaction_fee` decimal(15,2) DEFAULT '0.00',
+  `net_amount` decimal(15,2) GENERATED ALWAYS AS ((`amount` - `transaction_fee`)) STORED,
+  `approved_by` bigint unsigned DEFAULT NULL,
+  `approved_at` timestamp NULL DEFAULT NULL,
+  `completed_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_user_id` (`user_id`),
+  KEY `idx_status` (`status`),
+  KEY `idx_method` (`method`),
+  KEY `idx_approved_by` (`approved_by`),
+  KEY `idx_created_at` (`created_at`),
+  CONSTRAINT `withdrawals_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `withdrawals_ibfk_2` FOREIGN KEY (`approved_by`) REFERENCES `users` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping events for database 'cryptominepro'
+--
+
+--
+-- Dumping routines for database 'cryptominepro'
+--
+/*!50003 DROP PROCEDURE IF EXISTS `sp_deposit` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_deposit`(
+    IN p_user_id BIGINT UNSIGNED,
+    IN p_amount DECIMAL(15,2),
+    IN p_method VARCHAR(50),
+    IN p_transaction_id VARCHAR(255)
+)
+BEGIN
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        ROLLBACK;
+        RESIGNAL;
+    END;
+    
+    START TRANSACTION;
+    
+    INSERT INTO deposits (
+        user_id, 
+        amount, 
+        method, 
+        transaction_id, 
+        status, 
+        created_at, 
+        updated_at
+    ) VALUES (
+        p_user_id, 
+        p_amount, 
+        p_method, 
+        p_transaction_id, 
+        'pending', 
+        NOW(), 
+        NOW()
+    );
+    
+    -- Return the created deposit record
+    SELECT 
+        id,
+        user_id,
+        amount,
+        method,
+        transaction_id,
+        status,
+        created_at,
+        updated_at
+    FROM deposits 
+    WHERE id = LAST_INSERT_ID();
+    
+    COMMIT;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `sp_get_admin_stats` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_get_admin_stats`()
+BEGIN
+    SELECT 
+        (SELECT COUNT(*) FROM users) AS total_users,
+        (SELECT COUNT(*) FROM users WHERE status = 'active') AS active_users,
+        (SELECT COUNT(*) FROM users WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)) AS new_users_week,
+        (SELECT COALESCE(SUM(amount), 0) FROM deposits WHERE status = 'completed') AS total_deposits,
+        (SELECT COALESCE(SUM(amount), 0) FROM withdrawals WHERE status = 'completed') AS total_withdrawals,
+        (SELECT COALESCE(SUM(amount_invested), 0) FROM purchases WHERE status = 'active') AS active_investments,
+        (SELECT COUNT(*) FROM deposits WHERE status = 'pending') AS pending_deposits,
+        (SELECT COUNT(*) FROM withdrawals WHERE status = 'pending') AS pending_withdrawals;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `sp_get_purchase_earning_status` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_get_purchase_earning_status`(
+    IN p_purchase_id BIGINT
+)
+BEGIN
+    SELECT 
+        p.id,
+        p.user_id,
+        p.engine_id,
+        p.amount_invested,
+        p.daily_earning,
+        p.total_earned,
+        p.start_date,
+        p.end_date,
+        p.last_earning_date,
+        p.status,
+        e.name as engine_name,
+        e.earning_interval,
+        e.daily_earning_rate,
+        -- Calculate expected earnings
+        CASE 
+            WHEN e.earning_interval = 'hourly' THEN
+                TIMESTAMPDIFF(HOUR, p.start_date, LEAST(NOW(), p.end_date)) * (p.daily_earning / 24)
+            ELSE
+                DATEDIFF(LEAST(NOW(), p.end_date), p.start_date) * p.daily_earning
+        END as expected_total_earnings,
+        -- Count actual earning logs
+        (SELECT COUNT(*) FROM engine_logs WHERE purchase_id = p.id) as earning_logs_count,
+        -- Get last processed earning
+        (SELECT MAX(earning_datetime) FROM engine_logs WHERE purchase_id = p.id) as last_processed_earning,
+        -- Calculate next earning time
+        CASE 
+            WHEN e.earning_interval = 'hourly' THEN
+                DATE_ADD(COALESCE(p.last_earning_date, p.start_date), INTERVAL 1 HOUR)
+            ELSE
+                DATE_ADD(COALESCE(p.last_earning_date, p.start_date), INTERVAL 1 DAY)
+        END as next_earning_time
+    FROM purchases p
+    JOIN mining_engines e ON p.engine_id = e.id
+    WHERE p.id = p_purchase_id;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `sp_get_setting` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_get_setting`(
+  IN p_setting_key VARCHAR(100)
+)
+BEGIN
+  SELECT setting_value, data_type 
+  FROM system_settings 
+  WHERE setting_key = p_setting_key AND is_editable = TRUE;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `sp_login_user` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = cp850 */ ;
+/*!50003 SET character_set_results = cp850 */ ;
+/*!50003 SET collation_connection  = cp850_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_login_user`(
+    IN p_email VARCHAR(255)
+)
+BEGIN
+    
+    UPDATE users 
+    SET last_login = CURRENT_TIMESTAMP 
+    WHERE email = p_email AND status = 'active';
+    
+    
+    SELECT id, email, password_hash, full_name, phone, role, balance, 
+           total_earnings, referral_code, status, created_at
+    FROM users 
+    WHERE email = p_email AND status = 'active';
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `sp_log_earning` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_log_earning`(
+    IN p_purchase_id BIGINT,
+    IN p_earning_amount DECIMAL(15,2),
+    IN p_earning_datetime DATETIME
+)
+BEGIN
+    DECLARE v_user_id BIGINT;
+    DECLARE v_existing_log_id BIGINT DEFAULT NULL;
+    DECLARE v_purchase_status VARCHAR(20);
+    DECLARE v_end_date DATE;
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        ROLLBACK;
+        RESIGNAL;
+    END;
+    
+    START TRANSACTION;
+    
+    -- Get purchase details and validate
+    SELECT user_id, status, end_date INTO v_user_id, v_purchase_status, v_end_date
+    FROM purchases 
+    WHERE id = p_purchase_id;
+    
+    -- Check if purchase exists
+    IF v_user_id IS NULL THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Purchase not found';
+    END IF;
+    
+    -- Check if purchase is active
+    IF v_purchase_status != 'active' THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Purchase is not active';
+    END IF;
+    
+    -- Check if earning date is within purchase period
+    IF DATE(p_earning_datetime) > v_end_date THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Earning date is beyond purchase end date';
+    END IF;
+    
+    -- Check for existing log with same datetime (prevent duplicates)
+    SELECT id INTO v_existing_log_id
+    FROM engine_logs 
+    WHERE purchase_id = p_purchase_id AND earning_datetime = p_earning_datetime
+    LIMIT 1;
+    
+    IF v_existing_log_id IS NOT NULL THEN
+        -- Return existing log instead of creating duplicate
+        SELECT * FROM engine_logs WHERE id = v_existing_log_id;
+        COMMIT;
+    ELSE
+        -- Insert new earning log
+        INSERT INTO engine_logs (purchase_id, user_id, earning_amount, earning_datetime, created_at)
+        VALUES (p_purchase_id, v_user_id, p_earning_amount, p_earning_datetime, CURRENT_TIMESTAMP);
+        
+        -- Update user balance and total earnings
+        UPDATE users 
+        SET balance = balance + p_earning_amount, 
+            total_earnings = total_earnings + p_earning_amount,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = v_user_id;
+        
+        -- Update purchase total earned and last earning date
+        UPDATE purchases 
+        SET total_earned = total_earned + p_earning_amount, 
+            last_earning_date = p_earning_datetime,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = p_purchase_id;
+        
+        -- Return the new log entry
+        SELECT * FROM engine_logs WHERE id = LAST_INSERT_ID();
+        
+        COMMIT;
+    END IF;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `sp_purchase_engine` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_purchase_engine`(
+    IN p_user_id BIGINT,
+    IN p_engine_id BIGINT,
+    IN p_amount DECIMAL(15,2)
+)
+BEGIN
+    -- Declare variables
+    DECLARE v_user_balance DECIMAL(15,2);
+    DECLARE v_engine_price DECIMAL(15,2);
+    DECLARE v_min_investment DECIMAL(15,2);
+    DECLARE v_daily_rate DECIMAL(15,4);
+    DECLARE v_duration INT;
+    DECLARE v_daily_earning DECIMAL(15,2);
+    DECLARE v_start_date DATE DEFAULT CURDATE();
+    DECLARE v_end_date DATE;
+    DECLARE v_max_investment DECIMAL(15,2) DEFAULT 5000000;
+    DECLARE v_error_msg TEXT;
+
+    -- Error handler
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        ROLLBACK;
+        RESIGNAL;
+    END;
+
+    START TRANSACTION;
+
+    -- Get user balance
+    SELECT balance INTO v_user_balance 
+    FROM users 
+    WHERE id = p_user_id
+    FOR UPDATE;
+
+    -- Get engine details
+    SELECT price, min_investment, daily_earning_rate, duration_days
+    INTO v_engine_price, v_min_investment, v_daily_rate, v_duration
+    FROM mining_engines 
+    WHERE id = p_engine_id AND is_active = TRUE
+    FOR UPDATE;
+
+    -- Use price as min_investment if null or 0
+    IF v_min_investment IS NULL OR v_min_investment = 0 THEN
+        SET v_min_investment = v_engine_price;
+    END IF;
+
+    -- Validate investment amount
+    IF p_amount < v_min_investment THEN
+        SET v_error_msg = CONCAT('Minimum investment for this engine is ', v_min_investment);
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = v_error_msg;
+    END IF;
+
+    IF p_amount > v_max_investment THEN
+        SET v_error_msg = CONCAT('Maximum investment for this engine is ', v_max_investment);
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = v_error_msg;
+    END IF;
+
+    -- Validate user balance
+    IF v_user_balance < p_amount THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Insufficient balance';
+    END IF;
+
+    -- Calculate earnings and end date
+    SET v_daily_earning = ROUND((p_amount / v_engine_price) * v_daily_rate, 2);
+    SET v_end_date = DATE_ADD(v_start_date, INTERVAL v_duration DAY);
+
+    -- Deduct user balance
+    UPDATE users 
+    SET balance = balance - p_amount
+    WHERE id = p_user_id;
+
+    -- Insert into purchases
+    INSERT INTO purchases (
+        user_id, engine_id, amount_invested, daily_earning, 
+        total_earned, start_date, end_date, status
+    )
+    VALUES (
+        p_user_id, p_engine_id, p_amount, v_daily_earning, 
+        0, v_start_date, v_end_date, 'active'
+    );
+
+    -- Return inserted purchase
+    SELECT * FROM purchases WHERE id = LAST_INSERT_ID();
+
+    COMMIT;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `sp_register_user` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = cp850 */ ;
+/*!50003 SET character_set_results = cp850 */ ;
+/*!50003 SET collation_connection  = cp850_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_register_user`(
+    IN p_email VARCHAR(255),
+    IN p_password_hash VARCHAR(255),
+    IN p_full_name VARCHAR(255),
+    IN p_phone VARCHAR(20),
+    IN p_referred_by VARCHAR(20)
+)
+BEGIN
+    DECLARE v_referrer_id BIGINT DEFAULT NULL;
+    DECLARE v_user_exists INT DEFAULT 0;
+    DECLARE v_new_user_id BIGINT;
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        ROLLBACK;
+        RESIGNAL;
+    END;
+    
+    START TRANSACTION;
+    
+    
+    SELECT COUNT(*) INTO v_user_exists 
+    FROM users 
+    WHERE email = p_email;
+    
+    IF v_user_exists > 0 THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Email already registered';
+    END IF;
+    
+    
+    IF p_referred_by IS NOT NULL AND p_referred_by != '' THEN
+        SELECT id INTO v_referrer_id 
+        FROM users 
+        WHERE referral_code = p_referred_by AND status = 'active';
+    END IF;
+    
+    
+    INSERT INTO users (email, password_hash, full_name, phone, referred_by)
+    VALUES (p_email, p_password_hash, p_full_name, p_phone, v_referrer_id);
+    
+    SET v_new_user_id = LAST_INSERT_ID();
+    
+    
+    IF v_referrer_id IS NOT NULL THEN
+        INSERT INTO referrals (referrer_id, referred_id)
+        VALUES (v_referrer_id, v_new_user_id);
+    END IF;
+    
+    
+    SELECT id, email, full_name, phone, role, balance, referral_code, created_at
+    FROM users 
+    WHERE id = v_new_user_id;
+    
+    COMMIT;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `sp_update_deposit_status` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_update_deposit_status`(
+    IN p_transaction_id VARCHAR(255),
+    IN p_status VARCHAR(50)
+)
+BEGIN
+    DECLARE v_user_id BIGINT UNSIGNED;
+    DECLARE v_amount DECIMAL(15,2);
+    DECLARE v_current_status VARCHAR(50);
+    DECLARE v_deposit_exists INT DEFAULT 0;
+
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        ROLLBACK;
+        RESIGNAL;
+    END;
+
+    START TRANSACTION;
+
+    -- Check if deposit exists
+    SELECT COUNT(*) INTO v_deposit_exists
+    FROM deposits 
+    WHERE transaction_id = p_transaction_id;
+
+    IF v_deposit_exists = 0 THEN
+        -- Deposit not found
+        SELECT 0 as success, 'Deposit not found' as message;
+        ROLLBACK;
+    ELSE
+        -- Get deposit details
+        SELECT user_id, amount, status
+        INTO v_user_id, v_amount, v_current_status
+        FROM deposits 
+        WHERE transaction_id = p_transaction_id
+        LIMIT 1;
+
+        IF v_current_status = 'completed' THEN
+            -- Already processed
+            SELECT 1 as success, 'Deposit already processed' as message;
+            COMMIT;
+        ELSE
+            -- Update deposit status
+            UPDATE deposits 
+            SET status = p_status, updated_at = NOW()
+            WHERE transaction_id = p_transaction_id;
+
+            -- If status is completed, update user balance
+            IF p_status = 'completed' THEN
+                UPDATE users 
+                SET balance = balance + v_amount, updated_at = NOW()
+                WHERE id = v_user_id;
+
+                SELECT 1 as success, 'Deposit completed and balance updated' as message, v_user_id as user_id, v_amount as amount;
+            ELSE
+                SELECT 1 as success, CONCAT('Deposit status updated to ', p_status) as message;
+            END IF;
+
+            COMMIT;
+        END IF;
+    END IF;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `sp_update_setting` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_update_setting`(
+    IN p_setting_key VARCHAR(100),
+    IN p_setting_value TEXT,
+    IN p_admin_id BIGINT UNSIGNED
+)
+BEGIN
+    DECLARE setting_exists INT DEFAULT 0;
+    
+    SELECT COUNT(*) INTO setting_exists 
+    FROM system_settings 
+    WHERE setting_key = p_setting_key;
+    
+    IF setting_exists > 0 THEN
+        UPDATE system_settings 
+        SET setting_value = p_setting_value, updated_at = CURRENT_TIMESTAMP 
+        WHERE setting_key = p_setting_key;
+        
+        INSERT INTO admin_logs (admin_id, action, target_type, target_id, details, created_at)
+        VALUES (p_admin_id, 'setting_update', 'system_setting', NULL, 
+                JSON_OBJECT('setting_key', p_setting_key, 'setting_value', p_setting_value), 
+                CURRENT_TIMESTAMP);
+        
+        SELECT 'Setting updated successfully' AS message;
+    ELSE
+        INSERT INTO system_settings (setting_key, setting_value, created_at, updated_at)
+        VALUES (p_setting_key, p_setting_value, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+        
+        INSERT INTO admin_logs (admin_id, action, target_type, target_id, details, created_at)
+        VALUES (p_admin_id, 'setting_create', 'system_setting', NULL, 
+                JSON_OBJECT('setting_key', p_setting_key, 'setting_value', p_setting_value), 
+                CURRENT_TIMESTAMP);
+        
+        SELECT 'Setting created successfully' AS message;
+    END IF;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `sp_withdraw` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = cp850 */ ;
+/*!50003 SET character_set_results = cp850 */ ;
+/*!50003 SET collation_connection  = cp850_general_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_withdraw`(
+    IN p_user_id BIGINT,
+    IN p_amount DECIMAL(15,2),
+    IN p_method VARCHAR(20),
+    IN p_account_details JSON
+)
+BEGIN
+    DECLARE v_user_balance DECIMAL(15,2);
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        ROLLBACK;
+        RESIGNAL;
+    END;
+    
+    START TRANSACTION;
+    
+    
+    SELECT balance INTO v_user_balance 
+    FROM users 
+    WHERE id = p_user_id;
+    
+    IF v_user_balance < p_amount THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Insufficient balance';
+    END IF;
+    
+    
+    INSERT INTO withdrawals (user_id, amount, method, account_details)
+    VALUES (p_user_id, p_amount, p_method, p_account_details);
+    
+    
+    SELECT * FROM withdrawals WHERE id = LAST_INSERT_ID();
+    
+    COMMIT;
+END ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
+
+/*!40101 SET SQL_MODE=@OLD_SQL_MODE */;
+/*!40014 SET FOREIGN_KEY_CHECKS=@OLD_FOREIGN_KEY_CHECKS */;
+/*!40014 SET UNIQUE_CHECKS=@OLD_UNIQUE_CHECKS */;
+/*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
+/*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
+/*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
+/*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
+
+-- Dump completed on 2025-07-31  2:24:41
