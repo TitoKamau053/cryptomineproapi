@@ -308,7 +308,7 @@ async function processHourlyEarnings(connection, purchase, lastProcessedTime, cu
     // Check if this earning period was already processed
     const [existingLog] = await connection.query(
       'SELECT id FROM engine_logs WHERE purchase_id = ? AND earning_datetime = ?',
-      [purchaseId, nextEarningTime]
+      [purchaseId, nextEarningTime instanceof Date ? nextEarningTime : new Date(nextEarningTime)]
     );
 
     if (existingLog.length === 0) {
@@ -356,7 +356,7 @@ async function processDailyEarnings(connection, purchase, lastProcessedTime, cur
     // Check if this earning period was already processed (check by date only)
     const [existingLog] = await connection.query(
       'SELECT id FROM engine_logs WHERE purchase_id = ? AND DATE(earning_datetime) = DATE(?)',
-      [purchaseId, nextEarningTime]
+      [purchaseId, nextEarningTime instanceof Date ? nextEarningTime : new Date(nextEarningTime)]
     );
 
     if (existingLog.length === 0) {
