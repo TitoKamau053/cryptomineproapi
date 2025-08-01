@@ -3,6 +3,22 @@ const pool = require('../db');
 /**
  * Enhanced purchase controller with proper timing logic for hourly/daily engines
  */
+const safeParseFloat = (value, defaultValue = 0) => {
+  if (value === null || value === undefined || value === '') return defaultValue;
+  const parsed = parseFloat(value);
+  return isNaN(parsed) ? defaultValue : parsed;
+};
+
+const safeParseInt = (value, defaultValue = 0) => {
+  if (value === null || value === undefined || value === '') return defaultValue;
+  const parsed = parseInt(value);
+  return isNaN(parsed) ? defaultValue : parsed;
+};
+
+const safeToFixed = (value, decimals = 2, defaultValue = 0) => {
+  const num = safeParseFloat(value, defaultValue);
+  return num.toFixed(decimals);
+};
 
 const purchaseEngine = async (req, res) => {
   const userId = req.user.id;
@@ -163,7 +179,7 @@ const purchaseEngine = async (req, res) => {
 
 const getUserPurchases = async (req, res) => {
   const userId = req.user.id;
-  const { status = 'all', page = 1, limit = 20 } = req.query;
+  const { status = 'all', page = 1, limit = 20, include_timing, include_progress } = req.query;
   
   try {
     const offset = (parseInt(page) - 1) * parseInt(limit);
@@ -180,35 +196,45 @@ const getUserPurchases = async (req, res) => {
       SELECT 
         p.id, 
         p.engine_id, 
-        e.name as engine_name,
-        e.earning_interval,
-        e.daily_earning_rate,
-        e.duration_days,
-        e.duration_hours,
-        p.amount_invested, 
-        p.daily_earning, 
-        p.total_earned, 
+        COALESCE(e.name, 'Unknown Engine') as engine_name,
+        COALESCE(e.earning_interval, 'daily') as earning_interval,
+        COALESCE(e.daily_earning_rate, 0) as daily_earning_rate,
+        COALESCE(e.duration_days, 0) as duration_days,
+        COALESCE(e.duration_hours, 0) as duration_hours,
+        COALESCE(p.amount_invested, 0) as amount_invested, 
+        COALESCE(p.daily_earning, 0) as daily_earning, 
+        COALESCE(p.total_earned, 0) as total_earned, 
         p.start_date, 
         p.end_date, 
         p.last_earning_date,
         p.status,
         p.created_at,
+        -- Add safe defaults for new columns
+        COALESCE(p.expected_earnings, 0) as expected_earnings,
+        COALESCE(p.earning_deficit, 0) as earning_deficit,
+        COALESCE(p.progress_percentage, 0) as progress_percentage,
+        COALESCE(p.periods_elapsed, 0) as stored_periods_elapsed,
+        COALESCE(p.total_periods, 0) as stored_total_periods,
+        COALESCE(p.is_earning_up_to_date, TRUE) as is_earning_up_to_date,
+        COALESCE(p.days_remaining, 0) as stored_days_remaining,
+        COALESCE(p.is_completed, FALSE) as is_completed,
+        -- Calculate periods dynamically if not stored
         CASE 
-          WHEN e.earning_interval = 'hourly' THEN 
-            TIMESTAMPDIFF(HOUR, p.start_date, LEAST(NOW(), p.end_date))
+          WHEN COALESCE(e.earning_interval, 'daily') = 'hourly' THEN 
+            COALESCE(TIMESTAMPDIFF(HOUR, p.start_date, LEAST(NOW(), p.end_date)), 0)
           ELSE 
-            DATEDIFF(LEAST(NOW(), p.end_date), p.start_date)
-        END as periods_elapsed,
+            COALESCE(DATEDIFF(LEAST(NOW(), p.end_date), p.start_date), 0)
+        END as calculated_periods_elapsed,
         CASE 
-          WHEN e.earning_interval = 'hourly' THEN 
-            TIMESTAMPDIFF(HOUR, p.start_date, p.end_date)
+          WHEN COALESCE(e.earning_interval, 'daily') = 'hourly' THEN 
+            COALESCE(TIMESTAMPDIFF(HOUR, p.start_date, p.end_date), 0)
           ELSE 
-            DATEDIFF(p.end_date, p.start_date)
-        END as total_periods,
+            COALESCE(DATEDIFF(p.end_date, p.start_date), 0)
+        END as calculated_total_periods,
         CASE 
           WHEN p.status = 'active' AND NOW() < p.end_date THEN
             CASE 
-              WHEN e.earning_interval = 'hourly' THEN
+              WHEN COALESCE(e.earning_interval, 'daily') = 'hourly' THEN
                 DATE_ADD(COALESCE(p.last_earning_date, p.start_date), INTERVAL 1 HOUR)
               ELSE
                 DATE_ADD(COALESCE(p.last_earning_date, p.start_date), INTERVAL 1 DAY)
@@ -216,7 +242,7 @@ const getUserPurchases = async (req, res) => {
           ELSE NULL
         END as next_earning_time
       FROM purchases p 
-      JOIN mining_engines e ON p.engine_id = e.id 
+      LEFT JOIN mining_engines e ON p.engine_id = e.id 
       ${whereClause}
       ORDER BY p.created_at DESC 
       LIMIT ? OFFSET ?
@@ -226,34 +252,87 @@ const getUserPurchases = async (req, res) => {
     const [countResult] = await pool.query(`
       SELECT COUNT(*) as total 
       FROM purchases p 
+      LEFT JOIN mining_engines e ON p.engine_id = e.id 
       ${whereClause}
     `, queryParams);
     
     const total = countResult[0].total;
     const totalPages = Math.ceil(total / parseInt(limit));
     
-    // Enhance purchases with additional calculations
+    // Enhanced purchases with proper number handling
     const enhancedPurchases = purchases.map(purchase => {
-      const periodsElapsed = Math.max(0, purchase.periods_elapsed || 0);
-      const totalPeriods = purchase.total_periods || 0;
-      const progressPercentage = totalPeriods > 0 ? Math.min(100, (periodsElapsed / totalPeriods) * 100) : 0;
+      // Safe number parsing with defaults
+      const amountInvested = safeParseFloat(purchase.amount_invested, 0);
+      const dailyEarning = safeParseFloat(purchase.daily_earning, 0);
+      const totalEarned = safeParseFloat(purchase.total_earned, 0);
+      const expectedEarnings = safeParseFloat(purchase.expected_earnings, 0);
+      const earningDeficit = safeParseFloat(purchase.earning_deficit, 0);
       
-      // Calculate expected vs actual earnings
-      const periodEarning = purchase.earning_interval === 'hourly' 
-        ? purchase.daily_earning / 24 
-        : purchase.daily_earning;
+      // Use stored values if available, otherwise calculate
+      const periodsElapsed = Math.max(0, 
+        safeParseInt(purchase.stored_periods_elapsed, 0) || 
+        safeParseInt(purchase.calculated_periods_elapsed, 0)
+      );
       
-      const expectedEarnings = periodsElapsed * periodEarning;
-      const earningDeficit = Math.max(0, expectedEarnings - purchase.total_earned);
+      const totalPeriods = Math.max(1, 
+        safeParseInt(purchase.stored_total_periods, 0) || 
+        safeParseInt(purchase.calculated_total_periods, 1)
+      );
       
+      // Calculate period earning based on interval
+      const earningInterval = purchase.earning_interval || 'daily';
+      let periodEarning = dailyEarning;
+      if (earningInterval === 'hourly') {
+        periodEarning = dailyEarning / 24;
+      }
+      
+      // Ensure periodEarning is a valid number
+      periodEarning = safeParseFloat(periodEarning, 0);
+      
+      // Calculate progress percentage
+      const progressPercentage = totalPeriods > 0 
+        ? Math.min(100, (periodsElapsed / totalPeriods) * 100) 
+        : 0;
+      
+      // Calculate expected vs actual earnings if not stored
+      const calculatedExpectedEarnings = expectedEarnings > 0 
+        ? expectedEarnings 
+        : periodsElapsed * periodEarning;
+        
+      const calculatedEarningDeficit = earningDeficit > 0 
+        ? earningDeficit 
+        : Math.max(0, calculatedExpectedEarnings - totalEarned);
+      
+      // Calculate days remaining
+      const now = new Date();
+      const endDate = new Date(purchase.end_date);
+      const daysRemaining = purchase.status === 'active' && now < endDate
+        ? Math.ceil((endDate - now) / (1000 * 60 * 60 * 24))
+        : 0;
+
       return {
-        ...purchase,
+        id: purchase.id,
+        engine_id: purchase.engine_id,
+        engine_name: purchase.engine_name,
+        user_id: userId,
+        amount_invested: safeToFixed(amountInvested, 2),
+        daily_earning: safeToFixed(dailyEarning, 2),
+        period_earning: safeToFixed(periodEarning, 8),
+        total_earned: safeToFixed(totalEarned, 2),
+        expected_earnings: safeToFixed(calculatedExpectedEarnings, 2),
+        earning_deficit: safeToFixed(calculatedEarningDeficit, 2),
+        start_date: purchase.start_date,
+        end_date: purchase.end_date,
+        last_earning_date: purchase.last_earning_date,
+        next_earning_time: purchase.next_earning_time,
+        status: purchase.status || 'active',
+        earning_interval: earningInterval,
         periods_elapsed: periodsElapsed,
-        progress_percentage: parseFloat(progressPercentage.toFixed(2)),
-        period_earning: parseFloat(periodEarning.toFixed(8)),
-        expected_earnings: parseFloat(expectedEarnings.toFixed(8)),
-        earning_deficit: parseFloat(earningDeficit.toFixed(8)),
-        is_earning_up_to_date: earningDeficit < 0.01,
+        total_periods: totalPeriods,
+        progress_percentage: safeToFixed(progressPercentage, 2),
+        days_remaining: daysRemaining,
+        is_earning_up_to_date: calculatedEarningDeficit < 0.01,
+        is_completed: purchase.is_completed || purchase.status === 'completed',
         formatted_next_earning: purchase.next_earning_time 
           ? new Date(purchase.next_earning_time).toLocaleString()
           : null
@@ -261,6 +340,7 @@ const getUserPurchases = async (req, res) => {
     });
     
     res.json({ 
+      success: true,
       purchases: enhancedPurchases,
       pagination: {
         current_page: parseInt(page),
@@ -274,7 +354,11 @@ const getUserPurchases = async (req, res) => {
     
   } catch (error) {
     console.error('Error fetching user purchases:', error);
-    res.status(500).json({ message: 'Internal server error' });
+    res.status(500).json({ 
+      success: false,
+      message: 'Internal server error',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 };
 
@@ -350,19 +434,22 @@ const getPurchaseDetails = async (req, res) => {
       }
     }
     
-    const expectedEarnings = periodsElapsed * periodEarning;
-    const progressPercentage = totalPeriods > 0 ? (periodsElapsed / totalPeriods) * 100 : 0;
+
     
+    // Replace the calculation section with safe number handling:
+      const expectedEarnings = safeParseFloat(periodsElapsed * periodEarning);
+      const progressPercentage = totalPeriods > 0 ? (periodsElapsed / totalPeriods) * 100 : 0;
+
     res.json({
       purchase: {
         ...purchase,
         periods_elapsed: Math.max(0, periodsElapsed),
         total_periods: totalPeriods,
-        period_earning: parseFloat(periodEarning.toFixed(8)),
-        expected_earnings: parseFloat(expectedEarnings.toFixed(8)),
-        progress_percentage: parseFloat(Math.min(100, progressPercentage).toFixed(2)),
+        period_earning: safeToFixed(periodEarning, 8),
+        expected_earnings: safeToFixed(expectedEarnings, 8),
+        progress_percentage: safeToFixed(Math.min(100, progressPercentage), 2),
         next_earning_time: nextEarningTime ? nextEarningTime.toISOString() : null,
-        earning_deficit: Math.max(0, expectedEarnings - purchase.total_earned),
+        earning_deficit: safeToFixed(Math.max(0, expectedEarnings - safeParseFloat(purchase.total_earned)), 8),
         is_completed: purchase.status === 'completed' || now >= endDate,
         days_remaining: purchase.status === 'active' && now < endDate 
           ? Math.ceil((endDate - now) / (1000 * 60 * 60 * 24))
@@ -371,7 +458,7 @@ const getPurchaseDetails = async (req, res) => {
       earning_history: earningLogs.map(log => ({
         ...log,
         formatted_datetime: new Date(log.earning_datetime).toLocaleString(),
-        formatted_amount: `KES ${parseFloat(log.earning_amount).toFixed(2)}`
+        formatted_amount: `KES ${safeToFixed(log.earning_amount, 2)}`
       }))
     });
     
