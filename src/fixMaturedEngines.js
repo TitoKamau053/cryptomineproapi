@@ -181,10 +181,9 @@ async function processAllMissingEarnings(maturedPurchases) {
       }
 
       // Mark purchase as completed - update both status and is_completed fields
-      await pool.query(
-        'UPDATE purchases SET status = "completed", is_completed = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-        [purchase.purchase_id]
-      );
+      await pool.query('UPDATE purchases SET is_completed = 1 WHERE id = ?', [purchase.purchase_id]);
+      await pool.query('UPDATE purchases SET status = ? WHERE id = ?', ['completed', purchase.purchase_id]);
+      await pool.query('UPDATE purchases SET updated_at = CURRENT_TIMESTAMP WHERE id = ?', [purchase.purchase_id]);
 
       console.log(`   ✅ Purchase completed: Created ${periodsCreated} earnings, Added KES ${purchaseEarningsAdded.toFixed(2)}`);
       
