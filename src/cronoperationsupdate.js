@@ -143,7 +143,7 @@ async function migrateExistingPurchases() {
       // Update purchase status if should be completed
       if (shouldBeCompleted && purchase.status === 'active') {
         await pool.query(
-          'UPDATE purchases SET status = "completed", updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+          'UPDATE purchases SET status = "completed", is_completed = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
           [purchase.id]
         );
         console.log(`   ✅ Purchase marked as completed`);
