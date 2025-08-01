@@ -20,6 +20,7 @@ async function identifyMaturedEngines() {
         p.end_date,
         p.status,
         p.total_earned,
+        p.is_completed,
         u.full_name,
         u.email,
         u.balance as current_balance,
@@ -49,6 +50,7 @@ async function identifyMaturedEngines() {
       JOIN mining_engines e ON p.engine_id = e.id
       WHERE p.end_date <= NOW()  -- Should be completed by now
         AND p.status = 'active'   -- But still showing as active
+        AND p.is_completed = 0    -- And not marked as completed
       ORDER BY p.end_date ASC
     `);
 
@@ -178,9 +180,9 @@ async function processAllMissingEarnings(maturedPurchases) {
         }
       }
 
-      // Mark purchase as completed
+      // Mark purchase as completed - update both status and is_completed fields
       await pool.query(
-        'UPDATE purchases SET status = "completed", updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+        'UPDATE purchases SET status = "completed", is_completed = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
         [purchase.purchase_id]
       );
 
@@ -384,12 +386,75 @@ async function updateUserBalances() {
 }
 
 /**
+ * STEP 5: Check for database schema issues
+ */
+async function checkDatabaseSchema() {
+  console.log('\n🔍 Checking database schema for potential issues...\n');
+
+  try {
+    // Check if required tables exist
+    const [tables] = await pool.query(`
+      SELECT TABLE_NAME 
+      FROM INFORMATION_SCHEMA.TABLES 
+      WHERE TABLE_SCHEMA = DATABASE() 
+      AND TABLE_NAME IN ('purchases', 'users', 'mining_engines', 'engine_logs')
+    `);
+
+    console.log('📋 Required tables found:');
+    tables.forEach(table => {
+      console.log(`   ✅ ${table.TABLE_NAME}`);
+    });
+
+    // Check purchases column structure
+    const [purchaseColumns] = await pool.query(`
+      SELECT COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE, COLUMN_DEFAULT
+      FROM INFORMATION_SCHEMA.COLUMNS 
+      WHERE TABLE_SCHEMA = DATABASE() 
+      AND TABLE_NAME = 'purchases'
+      ORDER BY ORDINAL_POSITION
+    `);
+
+    console.log('\n📋 Purchases table columns:');
+    purchaseColumns.forEach(col => {
+      console.log(`   ${col.COLUMN_NAME}: ${col.COLUMN_TYPE} (Nullable: ${col.IS_NULLABLE})`);
+    });
+
+    // Check if stored procedure exists
+    const [procedures] = await pool.query(`
+      SELECT ROUTINE_NAME 
+      FROM INFORMATION_SCHEMA.ROUTINES 
+      WHERE ROUTINE_SCHEMA = DATABASE() 
+      AND ROUTINE_NAME = 'sp_log_earning'
+    `);
+
+    if (procedures.length > 0) {
+      console.log('\n✅ Stored procedure sp_log_earning exists');
+    } else {
+      console.log('\n⚠️  Stored procedure sp_log_earning not found - this may cause issues');
+    }
+
+    return {
+      tables_found: tables.length,
+      purchases_columns: purchaseColumns.length,
+      sp_exists: procedures.length > 0
+    };
+
+  } catch (error) {
+    console.error('❌ Error checking database schema:', error);
+    throw error;
+  }
+}
+
+/**
  * MAIN EXECUTION
  */
 async function fixAllMaturedEngines() {
   console.log('🚀 Starting comprehensive fix for all matured engines...\n');
 
   try {
+    // Step 0: Check database schema
+    const schemaCheck = await checkDatabaseSchema();
+
     // Step 1: Identify matured engines
     const maturedPurchases = await identifyMaturedEngines();
 
@@ -404,6 +469,7 @@ async function fixAllMaturedEngines() {
 
     console.log('\n🎉 ALL FIXES COMPLETED SUCCESSFULLY!');
     console.log('\n📋 Summary:');
+    console.log(`   - Database schema check: ${schemaCheck.tables_found}/4 tables found`);
     console.log(`   - Matured purchases found: ${maturedPurchases.length}`);
     console.log(`   - Purchases processed: ${processingResult.processed}`);
     console.log(`   - Total earnings added: KES ${processingResult.totalEarnings.toFixed(2)}`);
@@ -417,6 +483,7 @@ async function fixAllMaturedEngines() {
     console.log('   4. Run the system health check to confirm everything is working');
 
     return {
+      schema_check: schemaCheck,
       matured_purchases: maturedPurchases.length,
       processed: processingResult.processed,
       total_earnings_added: processingResult.totalEarnings,
@@ -442,6 +509,9 @@ switch (command) {
   case 'balances':
     updateUserBalances().then(() => process.exit(0)).catch(() => process.exit(1));
     break;
+  case 'schema':
+    checkDatabaseSchema().then(() => process.exit(0)).catch(() => process.exit(1));
+    break;
   case 'fix':
   default:
     fixAllMaturedEngines().then(() => process.exit(0)).catch(() => process.exit(1));
@@ -453,5 +523,6 @@ module.exports = {
   processAllMissingEarnings,
   generateAdminReport,
   updateUserBalances,
+  checkDatabaseSchema,
   fixAllMaturedEngines
 };
