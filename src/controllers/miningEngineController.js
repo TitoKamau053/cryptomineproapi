@@ -69,12 +69,8 @@ const getMiningEngines = async (req, res) => {
           annual_rate_percentage: parseFloat(annualRate),
           total_potential_return: parseFloat(totalPotentialReturn),
           roi_percentage: ((totalPotentialReturn / engine.price) * 100).toFixed(2),
-          daily_earning_amount: engine.earning_interval === 'hourly' 
-            ? (engine.price * (engine.daily_earning_rate / 100) * 24).toFixed(8)
-            : (engine.price * (engine.daily_earning_rate / 100)).toFixed(2),
-          hourly_earning_amount: engine.earning_interval === 'hourly'
-            ? (engine.price * (engine.daily_earning_rate / 100)).toFixed(8)
-            : (engine.price * (engine.daily_earning_rate / 100) / 24).toFixed(8)
+          daily_earning_amount: (engine.price * (engine.daily_earning_rate / 100)).toFixed(8),
+          hourly_earning_amount: (engine.price * (engine.daily_earning_rate / 100) / 24).toFixed(8)
         }
       };
     });
@@ -182,12 +178,8 @@ const getMiningEngineById = async (req, res) => {
         annual_rate_percentage: parseFloat(annualRate.toFixed(2)),
         total_potential_return: parseFloat(totalPotentialReturn.toFixed(2)),
         roi_percentage: parseFloat(((totalPotentialReturn / engine.price) * 100).toFixed(2)),
-        daily_earning_amount: engine.earning_interval === 'hourly' 
-          ? parseFloat((engine.price * (engine.daily_earning_rate / 100) * 24).toFixed(8))
-          : parseFloat((engine.price * (engine.daily_earning_rate / 100)).toFixed(2)),
-        hourly_earning_amount: engine.earning_interval === 'hourly'
-          ? parseFloat((engine.price * (engine.daily_earning_rate / 100)).toFixed(8))
-          : parseFloat((engine.price * (engine.daily_earning_rate / 100) / 24).toFixed(8)),
+        daily_earning_amount: parseFloat((engine.price * (engine.daily_earning_rate / 100)).toFixed(8)),
+        hourly_earning_amount: parseFloat((engine.price * (engine.daily_earning_rate / 100) / 24).toFixed(8)),
         expected_total_earnings: parseFloat(totalPotentialReturn.toFixed(2)),
         break_even_days: Math.ceil(engine.price / (engine.price * (engine.daily_earning_rate / 100) * (engine.earning_interval === 'hourly' ? 24 : 1)))
       }
@@ -809,13 +801,8 @@ const testMiningEngineConfig = async (req, res) => {
     const totalReturn = investmentAmount * (annualRate / 100) * (duration_days / 365);
     const roi = (totalReturn / investmentAmount) * 100;
 
-    const dailyEarning = earning_interval === 'hourly'
-      ? investmentAmount * (daily_earning_rate / 100) * 24
-      : investmentAmount * (daily_earning_rate / 100);
-
-    const hourlyEarning = earning_interval === 'hourly'
-      ? investmentAmount * (daily_earning_rate / 100)
-      : dailyEarning / 24;
+    const dailyEarning = investmentAmount * (daily_earning_rate / 100);
+    const hourlyEarning = dailyEarning / 24;
 
     // Generate sample earnings schedule
     const sampleEarnings = [];

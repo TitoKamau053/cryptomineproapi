@@ -78,21 +78,20 @@ const purchaseEngine = async (req, res) => {
     let dailyEarning, periodEarning, totalDuration, endDate;
     const purchaseTime = new Date(); // Exact purchase time
     
+    // Unified earnings calculation: earnings = ROI * Investment (daily_earning_rate / 100 * amount)
+    // This represents the daily earning amount regardless of interval
+    dailyEarning = parseFloat((amount * (engine.daily_earning_rate / 100)).toFixed(8));
+
+    // Period earning is what user gets per earning interval
     if (engine.earning_interval === 'hourly') {
-      // For hourly engines: each period earns hourly_rate, daily_earning is total per day
-      periodEarning = parseFloat((amount * (engine.daily_earning_rate / 100)).toFixed(8));
-      dailyEarning = parseFloat((periodEarning * 24).toFixed(8));
-      totalDuration = engine.duration_hours || 24; // Default to 24 hours if not set
-      
+      periodEarning = parseFloat((dailyEarning / 24).toFixed(8)); // Hourly portion of daily earning
+      totalDuration = engine.duration_hours || 24;
       // End date = purchase time + total duration in hours
       endDate = new Date(purchaseTime);
       endDate.setHours(endDate.getHours() + totalDuration);
     } else {
-      // For daily engines: each period earns daily_rate
-      dailyEarning = parseFloat((amount * (engine.daily_earning_rate / 100)).toFixed(2));
-      periodEarning = dailyEarning;
-      totalDuration = engine.duration_days || 365; // Default to 365 days if not set
-      
+      periodEarning = dailyEarning; // Full daily earning for daily interval
+      totalDuration = engine.duration_days || 365;
       // End date = purchase time + total duration in days
       endDate = new Date(purchaseTime);
       endDate.setDate(endDate.getDate() + totalDuration);

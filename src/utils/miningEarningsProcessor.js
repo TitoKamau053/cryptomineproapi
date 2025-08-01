@@ -291,7 +291,8 @@ async function processPurchaseEarnings(connection, purchase, currentTime) {
  */
 async function processHourlyEarningsExact(connection, purchase, purchaseDateTime, currentTime, endDateTime) {
   const { id: purchaseId, daily_earning: dailyEarning, duration_hours: durationHours } = purchase;
-  const hourlyEarning = parseFloat((dailyEarning / 24).toFixed(8));
+  // Use dailyEarning directly as hourly earning per period (no division)
+  const hourlyEarning = parseFloat(dailyEarning.toFixed(8));
   
   let periodsProcessed = 0;
   let totalEarning = 0;
